@@ -19,6 +19,14 @@ pub struct KnowledgeTopic {
     pub file_types: Vec<String>,
     pub tags: Vec<String>,
     pub body: String,
+    #[serde(default)]
+    pub syntax_blocks: Vec<String>,
+    #[serde(default)]
+    pub relationships: Vec<String>,
+    #[serde(default)]
+    pub validation: Vec<String>,
+    #[serde(default)]
+    pub source_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,11 +85,19 @@ impl KnowledgeTopic {
             self.title,
             self.category,
             self.file_types.join(" "),
-            self.tags.join(" ")
+            self.tags.join(" "),
         )
         .to_ascii_lowercase()
             + " "
             + &self.body.to_ascii_lowercase()
+            + " "
+            + &self.syntax_blocks.join(" ").to_ascii_lowercase()
+            + " "
+            + &self.relationships.join(" ").to_ascii_lowercase()
+            + " "
+            + &self.validation.join(" ").to_ascii_lowercase()
+            + " "
+            + &self.source_refs.join(" ").to_ascii_lowercase()
     }
 }
 
@@ -213,13 +229,36 @@ fn topic_uri(topic_id: &str) -> String {
 }
 
 fn topic_to_markdown(topic: &KnowledgeTopic) -> String {
+    let syntax = markdown_list("Syntax blocks", &topic.syntax_blocks);
+    let relationships = markdown_list("Relationships", &topic.relationships);
+    let validation = markdown_list("Validation", &topic.validation);
+    let source_refs = markdown_list("Source references", &topic.source_refs);
+
     format!(
-        "# {}\n\n- ID: {}\n- Category: {}\n- File types: {}\n- Tags: {}\n\n{}",
+        "# {}\n\n- ID: {}\n- Category: {}\n- File types: {}\n- Tags: {}\n\n{}\n\n{}{}{}{}",
         topic.title,
         topic.id,
         topic.category,
         topic.file_types.join(", "),
         topic.tags.join(", "),
-        topic.body
+        topic.body,
+        syntax,
+        relationships,
+        validation,
+        source_refs
     )
+}
+
+fn markdown_list(title: &str, items: &[String]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+
+    let list = items
+        .iter()
+        .map(|item| format!("- {}", item))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!("## {}\n\n{}\n\n", title, list)
 }

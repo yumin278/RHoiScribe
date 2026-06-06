@@ -4,15 +4,65 @@ use rhoiscribe::resources::KnowledgeCatalog;
 fn embedded_catalog_contains_required_hoi4_topics() {
     let catalog = KnowledgeCatalog::load_embedded().expect("embedded knowledge should parse");
 
+    assert!(catalog.topics.len() >= 40);
     assert!(catalog.topic("structure.mod_tree").is_some());
+    assert!(catalog.topic("structure.descriptor").is_some());
+    assert!(catalog.topic("script.scopes").is_some());
+    assert!(catalog.topic("script.triggers").is_some());
+    assert!(catalog.topic("script.effects").is_some());
+    assert!(catalog.topic("script.modifiers").is_some());
+    assert!(catalog.topic("script.variables").is_some());
+    assert!(catalog.topic("script.arrays").is_some());
     assert!(catalog.topic("localisation.encoding").is_some());
+    assert!(catalog.topic("localisation.dynamic_text").is_some());
+    assert!(catalog.topic("scripted_triggers.effects").is_some());
+    assert!(catalog.topic("scripted_localisation.entries").is_some());
     assert!(catalog.topic("scripted_gui.dynamic_lists").is_some());
     assert!(catalog.topic("gui.gfx_sprites").is_some());
     assert!(catalog.topic("focus.basic_tree").is_some());
     assert!(catalog.topic("decision.basic_category").is_some());
     assert!(catalog.topic("events.country_event").is_some());
+    assert!(catalog.topic("on_actions.hooks").is_some());
     assert!(catalog.topic("ideas.country_ideas").is_some());
+    assert!(catalog.topic("characters.leaders_advisors").is_some());
+    assert!(catalog.topic("technology.tech_trees").is_some());
+    assert!(catalog.topic("equipment.archetypes").is_some());
+    assert!(catalog.topic("units.division_templates").is_some());
+    assert!(catalog.topic("history.countries").is_some());
+    assert!(catalog.topic("history.states").is_some());
+    assert!(catalog.topic("map.adjacencies").is_some());
+    assert!(catalog.topic("ai.ai_strategy").is_some());
+    assert!(catalog.topic("defines.game_constants").is_some());
     assert!(catalog.topic("debug.common_errors").is_some());
+}
+
+#[test]
+fn catalog_topics_have_multidimensional_guidance_and_sources() {
+    let catalog = KnowledgeCatalog::load_embedded().expect("embedded knowledge should parse");
+
+    for topic in &catalog.topics {
+        assert!(
+            !topic.source_refs.is_empty(),
+            "{} should cite at least one reference",
+            topic.id
+        );
+        assert!(
+            !topic.validation.is_empty(),
+            "{} should include validation guidance",
+            topic.id
+        );
+    }
+
+    let trigger_topic = catalog
+        .topic("script.triggers")
+        .expect("trigger topic should exist");
+    assert!(!trigger_topic.syntax_blocks.is_empty());
+    assert!(
+        trigger_topic
+            .relationships
+            .iter()
+            .any(|item| item.contains("effects"))
+    );
 }
 
 #[test]
@@ -24,6 +74,7 @@ fn localisation_topic_records_utf8_bom_requirement() {
 
     assert_eq!(topic.category, "localisation");
     assert!(topic.body.contains("UTF-8 BOM"));
+    assert!(!topic.syntax_blocks.is_empty());
     assert!(topic.file_types.contains(&"yml".to_string()));
 }
 
