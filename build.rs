@@ -98,7 +98,7 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "CompanyName", "CzXieDdan\0"
-            VALUE "FileDescription", "RHoiScribe local MCP server for HOI4 modding agents\0"
+            VALUE "FileDescription", "RHoiScribe MCP Server\0"
             VALUE "FileVersion", "{version_string}\0"
             VALUE "InternalName", "rhoiscribe\0"
             VALUE "LegalCopyright", "Copyright © 2026 CzXieDdan\0"
