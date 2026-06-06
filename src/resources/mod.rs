@@ -8,8 +8,8 @@ pub const LATEST_UPDATE_URI: &str = "rhoiscribe://hoi4/latest-update";
 pub const KNOWLEDGE_CATALOG_URI: &str = "rhoiscribe://hoi4/knowledge/catalog";
 pub const KNOWLEDGE_TOPIC_URI_PREFIX: &str = "rhoiscribe://hoi4/knowledge/";
 
-const EMBEDDED_CATALOG: &str = include_str!("../../knowledge/hoi4/catalog.json");
-const LATEST_UPDATE: &str = include_str!("../../knowledge/hoi4/latest-update.md");
+const EMBEDDED_CATALOG: &str = include_str!("../../resources/knowledge/hoi4/catalog.json");
+const LATEST_UPDATE: &str = include_str!("../../resources/knowledge/hoi4/latest-update.md");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnowledgeTopic {
