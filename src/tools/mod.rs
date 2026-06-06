@@ -4,6 +4,8 @@ use rmcp::model::{CallToolResult, JsonObject, Tool, ToolAnnotations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+use crate::resources::{KNOWLEDGE_TOPIC_URI_PREFIX, KnowledgeCatalog};
+
 pub const MODULE_PURPOSE: &str = "batch generation and validation tools";
 
 const TOOL_SPECS: &[ToolSpec] = &[
@@ -30,6 +32,12 @@ const TOOL_SPECS: &[ToolSpec] = &[
         title: "Generate decision batch",
         description: "Generate a minimal decision category file and matching localisation dry-run.",
         required: &["category_id", "decisions", "dry_run"],
+    },
+    ToolSpec {
+        name: "search_hoi4_knowledge",
+        title: "Search HOI4 knowledge",
+        description: "Search bundled HOI4 modding knowledge topics and return matching MCP resource URIs.",
+        required: &["query"],
     },
     ToolSpec {
         name: "validate_hoi4_paths",
@@ -88,6 +96,12 @@ pub struct DecisionBatchRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SearchHoi4KnowledgeRequest {
+    pub query: String,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ValidateHoi4PathsRequest {
     pub paths: Vec<String>,
 }
@@ -127,6 +141,22 @@ pub struct PathValidationResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FormatParadoxScriptResult {
     pub formatted: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KnowledgeSearchMatch {
+    pub id: String,
+    pub uri: String,
+    pub title: String,
+    pub category: String,
+    pub tags: Vec<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KnowledgeSearchResult {
+    pub query: String,
+    pub matches: Vec<KnowledgeSearchMatch>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,6 +219,12 @@ impl ToolCatalog {
                 let request = parse_arguments::<DecisionBatchRequest>(arguments)?;
                 Ok(CallToolResult::structured(json!(
                     ToolEngine::generate_decision_batch(request)?
+                )))
+            }
+            "search_hoi4_knowledge" => {
+                let request = parse_arguments::<SearchHoi4KnowledgeRequest>(arguments)?;
+                Ok(CallToolResult::structured(json!(
+                    ToolEngine::search_hoi4_knowledge(request)?
                 )))
             }
             "validate_hoi4_paths" => {
@@ -341,6 +377,32 @@ impl ToolEngine {
                 summary: "HOI4 decision category file".to_string(),
             }],
         )
+    }
+
+    pub fn search_hoi4_knowledge(
+        request: SearchHoi4KnowledgeRequest,
+    ) -> Result<KnowledgeSearchResult, ToolError> {
+        let catalog = KnowledgeCatalog::load_embedded()
+            .map_err(|error| ToolError::InvalidRequest(error.to_string()))?;
+        let limit = request.limit.unwrap_or(8).clamp(1, 20);
+        let matches = catalog
+            .search(&request.query)
+            .into_iter()
+            .take(limit)
+            .map(|topic| KnowledgeSearchMatch {
+                id: topic.id.clone(),
+                uri: format!("{}{}", KNOWLEDGE_TOPIC_URI_PREFIX, topic.id),
+                title: topic.title.clone(),
+                category: topic.category.clone(),
+                tags: topic.tags.clone(),
+                summary: topic.body.clone(),
+            })
+            .collect();
+
+        Ok(KnowledgeSearchResult {
+            query: request.query,
+            matches,
+        })
     }
 
     pub fn validate_hoi4_paths(request: ValidateHoi4PathsRequest) -> PathValidationResult {

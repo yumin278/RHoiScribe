@@ -83,7 +83,7 @@ Agents は空の prompt から始める代わりに、ローカル resources を
 - `rhoiscribe://hoi4/knowledge/catalog`
 - `rhoiscribe://hoi4/knowledge/<topic_id>`
 
-Knowledge catalog は agent 向けに構造化されています。Topics には category、file types、tags、syntax examples、他の HOI4 systems との relationships、validation guidance、source references が含まれます。現在の範囲は script basics、scopes、triggers、effects、modifiers、variables、arrays、localisation、scripted localisation、scripted triggers/effects、GUI、scripted GUI、focuses、events、decisions、ideas、characters、history、map files、technology、equipment、units、AI、diplomacy、game rules、defines、bookmarks、audio、common loading errors です。
+Knowledge catalog は agent 向けに構造化されています。Topics には category、file types、tags、syntax examples、他の HOI4 systems との relationships、validation guidance、source references が含まれます。現在の範囲は script basics、scopes、triggers、effects、modifiers、variables、MTTH variables、arrays、localisation、scripted localisation、scripted triggers/effects、GUI、scripted GUI、focuses、events、detailed on_action scope families、decisions、missions、ideas、characters、history、map files、technology、equipment、units、AI、diplomacy、game rules、defines、bookmarks、audio、common loading errors です。
 
 <h3 align="center">Tools</h3>
 
@@ -93,10 +93,12 @@ Agents は反復可能な生成と検証のために tools を呼び出せます
 - `generate_focus_batch`
 - `generate_event_batch`
 - `generate_decision_batch`
+- `search_hoi4_knowledge`
 - `validate_hoi4_paths`
 - `format_paradox_script`
 
 Generation tools は dry-run preview をサポートします。write mode では `output_root` が必要で、対象 Mod の root からの相対 path にのみ書き込みます。
+Knowledge search は `mtth variables`、`decision mission blocks`、`on_actions FROM.FROM` のような query に対して matching topic IDs と MCP resource URIs を返します。
 
 <h2 align="center">クイックスタート</h2>
 

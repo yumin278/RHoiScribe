@@ -83,7 +83,7 @@ Agents can read local resources instead of starting from a blank prompt:
 - `rhoiscribe://hoi4/knowledge/catalog`
 - `rhoiscribe://hoi4/knowledge/<topic_id>`
 
-The knowledge catalog is structured for agent use. Topics contain category, file types, tags, syntax examples, relationships to other HOI4 systems, validation guidance, and source references. Current coverage includes script basics, scopes, triggers, effects, modifiers, variables, arrays, localisation, scripted localisation, scripted triggers/effects, GUI, scripted GUI, focuses, events, decisions, ideas, characters, history, map files, technology, equipment, units, AI, diplomacy, game rules, defines, bookmarks, audio, and common loading errors.
+The knowledge catalog is structured for agent use. Topics contain category, file types, tags, syntax examples, relationships to other HOI4 systems, validation guidance, and source references. Current coverage includes script basics, scopes, triggers, effects, modifiers, variables, MTTH variables, arrays, localisation, scripted localisation, scripted triggers/effects, GUI, scripted GUI, focuses, events, detailed on_action scope families, decisions, missions, ideas, characters, history, map files, technology, equipment, units, AI, diplomacy, game rules, defines, bookmarks, audio, and common loading errors.
 
 <h3 align="center">Tools</h3>
 
@@ -93,10 +93,12 @@ Agents can call tools for repeatable generation and validation:
 - `generate_focus_batch`
 - `generate_event_batch`
 - `generate_decision_batch`
+- `search_hoi4_knowledge`
 - `validate_hoi4_paths`
 - `format_paradox_script`
 
 Generation tools support dry-run previews. In write mode they require an `output_root` and write paths relative to the target mod root.
+Knowledge search returns matching topic IDs and MCP resource URIs for queries such as `mtth variables`, `decision mission blocks`, or `on_actions FROM.FROM`.
 
 <h2 align="center">Quick Start</h2>
 
