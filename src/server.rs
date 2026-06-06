@@ -3,15 +3,16 @@ use std::{future, future::Future};
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
     model::{
-        GetPromptRequestParams, GetPromptResult, Implementation, ListPromptsResult,
-        ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult,
-        ServerCapabilities, ServerInfo,
+        CallToolRequestParams, CallToolResult, GetPromptRequestParams, GetPromptResult,
+        Implementation, ListPromptsResult, ListResourcesResult, ListToolsResult,
+        PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult, ServerCapabilities,
+        ServerInfo,
     },
     service::{MaybeSendFuture, RequestContext},
     transport::stdio,
 };
 
-use crate::{prompts::PromptCatalog, resources::ResourceCatalog};
+use crate::{prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatalog};
 
 pub const SERVER_NAME: &str = "rhoiscribe";
 pub const SERVER_TITLE: &str = "RHoiScribe";
@@ -114,6 +115,29 @@ impl ServerHandler for RhoiScribeServer {
                         .read_mcp_resource(&request.uri)
                         .map_err(|error| McpError::invalid_params(error.to_string(), None))
                 }),
+        )
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListToolsResult, McpError>> + MaybeSendFuture + '_ {
+        future::ready(Ok(ListToolsResult::with_all_items(
+            ToolCatalog::builtin().to_mcp_tools(),
+        )))
+    }
+
+    fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<CallToolResult, McpError>> + MaybeSendFuture + '_ {
+        let arguments = request.arguments.unwrap_or_default();
+        future::ready(
+            ToolCatalog::builtin()
+                .call(&request.name, arguments)
+                .map_err(|error| McpError::invalid_params(error.to_string(), None)),
         )
     }
 }
