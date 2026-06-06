@@ -1,8 +1,15 @@
+use std::{error::Error, fmt};
+
+use rmcp::model::{Annotated, RawResource, ReadResourceResult, Resource, ResourceContents};
 use serde::{Deserialize, Serialize};
 
 pub const MODULE_PURPOSE: &str = "versioned HOI4 knowledge resources";
+pub const LATEST_UPDATE_URI: &str = "rhoiscribe://hoi4/latest-update";
+pub const KNOWLEDGE_CATALOG_URI: &str = "rhoiscribe://hoi4/knowledge/catalog";
+pub const KNOWLEDGE_TOPIC_URI_PREFIX: &str = "rhoiscribe://hoi4/knowledge/";
 
 const EMBEDDED_CATALOG: &str = include_str!("../../knowledge/hoi4/catalog.json");
+const LATEST_UPDATE: &str = include_str!("../../knowledge/hoi4/latest-update.md");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnowledgeTopic {
@@ -76,4 +83,143 @@ impl KnowledgeTopic {
             + " "
             + &self.body.to_ascii_lowercase()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceCatalog {
+    knowledge: KnowledgeCatalog,
+    latest_update: &'static str,
+}
+
+#[derive(Debug)]
+pub enum ResourceReadError {
+    UnknownUri(String),
+    SerializeCatalog(serde_json::Error),
+}
+
+impl ResourceCatalog {
+    pub fn load_embedded() -> Result<Self, serde_json::Error> {
+        Ok(Self {
+            knowledge: KnowledgeCatalog::load_embedded()?,
+            latest_update: LATEST_UPDATE,
+        })
+    }
+
+    pub fn to_mcp_resources(&self) -> Vec<Resource> {
+        let mut resources = vec![
+            text_resource(
+                LATEST_UPDATE_URI,
+                "hoi4_latest_update",
+                "HOI4 latest update snapshot",
+                "Static local snapshot of the latest visible official HOI4 update.",
+                self.latest_update,
+                "text/markdown",
+            ),
+            text_resource(
+                KNOWLEDGE_CATALOG_URI,
+                "hoi4_knowledge_catalog",
+                "HOI4 knowledge catalog",
+                "Structured index of bundled HOI4 Modding knowledge topics.",
+                EMBEDDED_CATALOG,
+                "application/json",
+            ),
+        ];
+
+        resources.extend(self.knowledge.topics.iter().map(|topic| {
+            let uri = topic_uri(&topic.id);
+            text_resource(
+                &uri,
+                &format!("hoi4_{}", topic.id.replace('.', "_")),
+                &topic.title,
+                &format!("HOI4 {} guidance.", topic.category),
+                &topic_to_markdown(topic),
+                "text/markdown",
+            )
+        }));
+
+        resources
+    }
+
+    pub fn read_text(&self, uri: &str) -> Result<String, ResourceReadError> {
+        match uri {
+            LATEST_UPDATE_URI => Ok(self.latest_update.to_string()),
+            KNOWLEDGE_CATALOG_URI => serde_json::to_string_pretty(&self.knowledge)
+                .map_err(ResourceReadError::SerializeCatalog),
+            _ => {
+                let Some(topic_id) = uri.strip_prefix(KNOWLEDGE_TOPIC_URI_PREFIX) else {
+                    return Err(ResourceReadError::UnknownUri(uri.to_string()));
+                };
+
+                let topic = self
+                    .knowledge
+                    .topic(topic_id)
+                    .ok_or_else(|| ResourceReadError::UnknownUri(uri.to_string()))?;
+
+                Ok(topic_to_markdown(topic))
+            }
+        }
+    }
+
+    pub fn read_mcp_resource(&self, uri: &str) -> Result<ReadResourceResult, ResourceReadError> {
+        let mime_type = if uri == KNOWLEDGE_CATALOG_URI {
+            "application/json"
+        } else {
+            "text/markdown"
+        };
+
+        Ok(ReadResourceResult::new(vec![
+            ResourceContents::text(self.read_text(uri)?, uri).with_mime_type(mime_type),
+        ]))
+    }
+}
+
+impl fmt::Display for ResourceReadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ResourceReadError::UnknownUri(uri) => write!(formatter, "unknown resource `{}`", uri),
+            ResourceReadError::SerializeCatalog(error) => {
+                write!(
+                    formatter,
+                    "failed to serialize knowledge catalog: {}",
+                    error
+                )
+            }
+        }
+    }
+}
+
+impl Error for ResourceReadError {}
+
+fn text_resource(
+    uri: &str,
+    name: &str,
+    title: &str,
+    description: &str,
+    content: &str,
+    mime_type: &str,
+) -> Resource {
+    Annotated::new(
+        RawResource::new(uri, name)
+            .with_title(title)
+            .with_description(description)
+            .with_mime_type(mime_type)
+            .with_size(content.len() as u32),
+        None,
+    )
+}
+
+fn topic_uri(topic_id: &str) -> String {
+    format!("{}{}", KNOWLEDGE_TOPIC_URI_PREFIX, topic_id)
+}
+
+fn topic_to_markdown(topic: &KnowledgeTopic) -> String {
+    format!(
+        "# {}\n\n- ID: {}\n- Category: {}\n- File types: {}\n- Tags: {}\n\n{}",
+        topic.title,
+        topic.id,
+        topic.category,
+        topic.file_types.join(", "),
+        topic.tags.join(", "),
+        topic.body
+    )
 }

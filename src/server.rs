@@ -4,13 +4,14 @@ use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
     model::{
         GetPromptRequestParams, GetPromptResult, Implementation, ListPromptsResult,
-        PaginatedRequestParams, ServerCapabilities, ServerInfo,
+        ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResult,
+        ServerCapabilities, ServerInfo,
     },
     service::{MaybeSendFuture, RequestContext},
     transport::stdio,
 };
 
-use crate::prompts::PromptCatalog;
+use crate::{prompts::PromptCatalog, resources::ResourceCatalog};
 
 pub const SERVER_NAME: &str = "rhoiscribe";
 pub const SERVER_TITLE: &str = "RHoiScribe";
@@ -85,6 +86,34 @@ impl ServerHandler for RhoiScribeServer {
             PromptCatalog::builtin()
                 .render(&request.name, &arguments)
                 .map_err(|error| McpError::invalid_params(error.to_string(), None)),
+        )
+    }
+
+    fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListResourcesResult, McpError>> + MaybeSendFuture + '_ {
+        future::ready(
+            ResourceCatalog::load_embedded()
+                .map(|catalog| ListResourcesResult::with_all_items(catalog.to_mcp_resources()))
+                .map_err(|error| McpError::internal_error(error.to_string(), None)),
+        )
+    }
+
+    fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ReadResourceResult, McpError>> + MaybeSendFuture + '_ {
+        future::ready(
+            ResourceCatalog::load_embedded()
+                .map_err(|error| McpError::internal_error(error.to_string(), None))
+                .and_then(|catalog| {
+                    catalog
+                        .read_mcp_resource(&request.uri)
+                        .map_err(|error| McpError::invalid_params(error.to_string(), None))
+                }),
         )
     }
 }
