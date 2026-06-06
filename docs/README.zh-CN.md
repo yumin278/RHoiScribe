@@ -1,6 +1,8 @@
 <div align="center">
 
-# RHoiScribe
+<img src="../resources/RHoiScribe.ico" alt="RHoiScribe" width="128" height="128">
+
+<h1 align="center">RHoiScribe</h1>
 
 面向 Hearts of Iron IV Modding Agents 的本地 MCP 服务器
 
@@ -19,27 +21,49 @@ RHoiScribe 为 Codex、Claude Code 和其他兼容 MCP 的客户端提供本地 
 
 它的目标很明确：减少 agent 因重复联网搜索、过时假设、不安全路径、缺少本地化编码、以及“看起来像 Paradox 脚本但游戏无法加载”的内容造成的浪费。
 
-## 环境
+<h2 align="center">环境</h2>
 
-| 项目 | 内容 |
-| --- | --- |
-| 服务传输 | 基于 stdio 的 MCP |
-| 实现语言 | Rust 2024 |
-| 构建工具 | Cargo |
-| 主要客户端 | Codex、Claude Code、MCP-compatible clients |
-| 运行时联网 | 内置 prompts、resources、tools 不需要联网 |
-| Modding 目标 | Hearts of Iron IV 本地 Mod |
+<table align="center">
+  <tr>
+    <th align="center">项目</th>
+    <th align="center">内容</th>
+  </tr>
+  <tr>
+    <td align="center">服务传输</td>
+    <td align="center">基于 stdio 的 MCP</td>
+  </tr>
+  <tr>
+    <td align="center">实现语言</td>
+    <td align="center">Rust 2024</td>
+  </tr>
+  <tr>
+    <td align="center">构建工具</td>
+    <td align="center">Cargo</td>
+  </tr>
+  <tr>
+    <td align="center">主要客户端</td>
+    <td align="center">Codex、Claude Code、MCP-compatible clients</td>
+  </tr>
+  <tr>
+    <td align="center">运行时联网</td>
+    <td align="center">内置 prompts、resources、tools 不需要联网</td>
+  </tr>
+  <tr>
+    <td align="center">Modding 目标</td>
+    <td align="center">Hearts of Iron IV 本地 Mod</td>
+  </tr>
+</table>
 
-## 适合谁
+<h2 align="center">适合谁</h2>
 
 - 希望 AI agents 生成 HOI4 内容时拥有更好本地上下文的 Mod 作者。
 - 需要把 prompts、resources、tools 统一接入一个 MCP server 的 agent 工作流。
 - 离线或低搜索开发场景，要求 agent 写文件前先读取内置 HOI4 指引。
 - 需要生成内容使用可预测 mod-root 路径和可审查输出结构的团队。
 
-## Agents 能得到什么
+<h2 align="center">Agents 能得到什么</h2>
 
-### Prompts
+<h3 align="center">Prompts</h3>
 
 内置 prompts 覆盖：
 
@@ -51,7 +75,7 @@ RHoiScribe 为 Codex、Claude Code 和其他兼容 MCP 的客户端提供本地 
 
 当前 prompt 名称包括 `hoi4_mod_planner`、`hoi4_script_writer`、`hoi4_localisation_writer`、`hoi4_gui_assistant`、`hoi4_review`。
 
-### Resources
+<h3 align="center">Resources</h3>
 
 Agents 可以读取本地资源，而不是从空白提示开始：
 
@@ -61,7 +85,7 @@ Agents 可以读取本地资源，而不是从空白提示开始：
 
 知识目录为 agent 使用而结构化。Topic 包含分类、文件类型、标签、语法示例、与其他 HOI4 系统的关系、验证建议和来源引用。当前覆盖脚本基础、scope、trigger、effect、modifier、变量、数组、本地化、scripted localisation、scripted triggers/effects、GUI、scripted GUI、国策、事件、决议、理念、角色、历史、地图文件、科技、装备、单位、AI、外交、游戏规则、defines、书签、音频和常见加载错误。
 
-### Tools
+<h3 align="center">Tools</h3>
 
 Agents 可以调用工具进行可重复的生成和验证：
 
@@ -74,7 +98,7 @@ Agents 可以调用工具进行可重复的生成和验证：
 
 生成工具支持 dry-run 预览。写入模式需要 `output_root`，并且只按目标 Mod 根目录的相对路径写入。
 
-## 快速开始
+<h2 align="center">快速开始</h2>
 
 构建服务器：
 
@@ -102,7 +126,7 @@ Linux 和 macOS 使用：
 
 Codex、Claude Code 和通用 MCP 配置示例见 [client-setup.md](client-setup.md)。
 
-## MCP Surface
+<h2 align="center">MCP Surface</h2>
 
 客户端启动 RHoiScribe 后，agent 可以使用标准 MCP 方法：
 
@@ -157,7 +181,7 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
 写入模式下生成的本地化文件会使用 UTF-8 BOM。
 当用户 Mod 已经使用嵌套本地化目录时，可以使用 `common/autonomy/CHI` 这样的 `file_stem`，也可以使用 `localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml` 这样的完整 Mod 相对路径。
 
-## 输出模型
+<h2 align="center">输出模型</h2>
 
 生成工具返回结构化文件计划：
 

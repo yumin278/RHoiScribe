@@ -1,6 +1,8 @@
 <div align="center">
 
-# RHoiScribe
+<img src="resources/RHoiScribe.ico" alt="RHoiScribe" width="128" height="128">
+
+<h1 align="center">RHoiScribe</h1>
 
 Local MCP server for Hearts of Iron IV modding agents
 
@@ -19,27 +21,49 @@ RHoiScribe gives Codex, Claude Code, and other MCP-compatible clients a local HO
 
 The goal is simple: reduce wasted agent work caused by repeated web searches, stale assumptions, unsafe file paths, missing localisation encoding, and Paradox script that looks plausible but does not load in game.
 
-## Environment
+<h2 align="center">Environment</h2>
 
-| Area | Value |
-| --- | --- |
-| Server transport | MCP over stdio |
-| Implementation | Rust 2024 |
-| Build tool | Cargo |
-| Primary clients | Codex, Claude Code, MCP-compatible clients |
-| Runtime network | Not required for bundled prompts, resources, and tools |
-| Modding target | Hearts of Iron IV local mods |
+<table align="center">
+  <tr>
+    <th align="center">Area</th>
+    <th align="center">Value</th>
+  </tr>
+  <tr>
+    <td align="center">Server transport</td>
+    <td align="center">MCP over stdio</td>
+  </tr>
+  <tr>
+    <td align="center">Implementation</td>
+    <td align="center">Rust 2024</td>
+  </tr>
+  <tr>
+    <td align="center">Build tool</td>
+    <td align="center">Cargo</td>
+  </tr>
+  <tr>
+    <td align="center">Primary clients</td>
+    <td align="center">Codex, Claude Code, MCP-compatible clients</td>
+  </tr>
+  <tr>
+    <td align="center">Runtime network</td>
+    <td align="center">Not required for bundled prompts, resources, and tools</td>
+  </tr>
+  <tr>
+    <td align="center">Modding target</td>
+    <td align="center">Hearts of Iron IV local mods</td>
+  </tr>
+</table>
 
-## Who It Is For
+<h2 align="center">Who It Is For</h2>
 
 - Mod authors who want AI agents to generate HOI4 content with better local context.
 - Agent workflows that need prompts, resources, and tools available through one MCP server.
 - Offline or low-search development sessions where the agent should read bundled HOI4 guidance before writing files.
 - Teams that want generated content to follow predictable mod-root paths and reviewable output shapes.
 
-## What Agents Get
+<h2 align="center">What Agents Get</h2>
 
-### Prompts
+<h3 align="center">Prompts</h3>
 
 Agents can use built-in prompts for:
 
@@ -51,7 +75,7 @@ Agents can use built-in prompts for:
 
 Prompt names currently include `hoi4_mod_planner`, `hoi4_script_writer`, `hoi4_localisation_writer`, `hoi4_gui_assistant`, and `hoi4_review`.
 
-### Resources
+<h3 align="center">Resources</h3>
 
 Agents can read local resources instead of starting from a blank prompt:
 
@@ -61,7 +85,7 @@ Agents can read local resources instead of starting from a blank prompt:
 
 The knowledge catalog is structured for agent use. Topics contain category, file types, tags, syntax examples, relationships to other HOI4 systems, validation guidance, and source references. Current coverage includes script basics, scopes, triggers, effects, modifiers, variables, arrays, localisation, scripted localisation, scripted triggers/effects, GUI, scripted GUI, focuses, events, decisions, ideas, characters, history, map files, technology, equipment, units, AI, diplomacy, game rules, defines, bookmarks, audio, and common loading errors.
 
-### Tools
+<h3 align="center">Tools</h3>
 
 Agents can call tools for repeatable generation and validation:
 
@@ -74,7 +98,7 @@ Agents can call tools for repeatable generation and validation:
 
 Generation tools support dry-run previews. In write mode they require an `output_root` and write paths relative to the target mod root.
 
-## Quick Start
+<h2 align="center">Quick Start</h2>
 
 Build the server:
 
@@ -102,7 +126,7 @@ Run it directly only when you want to start the stdio MCP server by hand:
 
 For Codex, Claude Code, and generic MCP configuration examples, see [docs/client-setup.md](docs/client-setup.md).
 
-## MCP Surface
+<h2 align="center">MCP Surface</h2>
 
 After the client starts RHoiScribe, the agent can use standard MCP methods:
 
@@ -157,7 +181,7 @@ Write mode adds a mod output root:
 The generated localisation file is written with UTF-8 BOM when write mode is enabled.
 Use `file_stem` values such as `common/autonomy/CHI`, or complete mod-relative paths such as `localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml`, when the user's mod already organizes localisation in nested folders.
 
-## Output Model
+<h2 align="center">Output Model</h2>
 
 Generation tools return structured file plans:
 
