@@ -5,3 +5,4 @@ dist/
 *.log
 AGENTS.md
 tests/
+scripts/verify.ps1

@@ -10,7 +10,7 @@ const BUILTIN_PROMPTS: &[PromptTemplate] = &[
         name: "hoi4_mod_planner",
         title: "HOI4 Mod Planner",
         description: "Turn a modding request into a game-readable HOI4 file plan.",
-        mode: "Plan the requested HOI4 mod content as concrete files, identifiers, localisation keys, and validation checks.",
+        mode: "Plan the requested HOI4 mod content as concrete files, identifiers, localisation keys, and validation checks. First mirror the user's current workspace path and naming conventions when visible.",
         arguments: &[
             PromptArgumentTemplate {
                 name: "request",
@@ -30,7 +30,7 @@ const BUILTIN_PROMPTS: &[PromptTemplate] = &[
         name: "hoi4_script_writer",
         title: "HOI4 Script Writer",
         description: "Generate Paradox script for HOI4 with path and syntax constraints.",
-        mode: "Write HOI4 script using stable IDs, explicit scopes, balanced braces, and matching localisation keys.",
+        mode: "Write HOI4 script using stable IDs, explicit scopes, balanced braces, and matching localisation keys. Match existing workspace ID, variable, focus, idea, event, and file naming style before falling back to official conventions.",
         arguments: &[
             PromptArgumentTemplate {
                 name: "request",
@@ -50,7 +50,7 @@ const BUILTIN_PROMPTS: &[PromptTemplate] = &[
         name: "hoi4_localisation_writer",
         title: "HOI4 Localisation Writer",
         description: "Generate HOI4 localisation entries with encoding and key consistency rules.",
-        mode: "Write localisation entries that match script IDs, keep language roots correct, and remind the agent to output UTF-8 BOM files when writing yml.",
+        mode: "Write localisation entries that match script IDs, keep language roots correct, and preserve the workspace's existing localisation folder depth and filename style before falling back to official HOI4 conventions.",
         arguments: &[
             PromptArgumentTemplate {
                 name: "request",
@@ -76,7 +76,7 @@ const BUILTIN_PROMPTS: &[PromptTemplate] = &[
         name: "hoi4_gui_assistant",
         title: "HOI4 GUI Assistant",
         description: "Generate GUI, GFX, and scripted GUI plans for HOI4 interface work.",
-        mode: "Coordinate .gui layout, .gfx sprite registration, common/scripted_guis logic, dynamic_lists, triggers, effects, and properties.",
+        mode: "Coordinate .gui layout, .gfx sprite registration, common/scripted_guis logic, dynamic_lists, triggers, effects, and properties. Learn existing GUI element, sprite, variable, and asset path conventions from the user's workspace first.",
         arguments: &[
             PromptArgumentTemplate {
                 name: "request",
@@ -96,7 +96,7 @@ const BUILTIN_PROMPTS: &[PromptTemplate] = &[
         name: "hoi4_review",
         title: "HOI4 Mod Review",
         description: "Review generated HOI4 mod files for syntax, paths, encoding, and game readability.",
-        mode: "Review generated content for invalid paths, mismatched IDs, localisation errors, missing UTF-8 BOM guidance, bad scope assumptions, and GUI/scripted_gui name mismatches.",
+        mode: "Review generated content against the user's explicit request and workspace conventions first, then official HOI4 path, syntax, encoding, scope, localisation, and GUI/scripted_gui rules.",
         arguments: &[
             PromptArgumentTemplate {
                 name: "request",
@@ -198,7 +198,10 @@ impl PromptCatalog {
              Optional context:\n{optional_context}\n\
              Constraints:\n\
              - Produce game-readable HOI4 mod content only.\n\
-             - Prefer known HOI4 folder paths, stable IDs, and matching localisation keys.\n\
+             - Priority order: current user request, then conventions discovered in the user's workspace, then bundled RHoiScribe resources, then official HOI4 defaults.\n\
+             - Before choosing paths or names, inspect available workspace files and mirror existing folder depth, filename suffixes, tag prefixes, variable names, focus IDs, event namespaces, idea IDs, GUI element names, and localisation key style.\n\
+             - Do not force flat localisation paths. Nested paths such as localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml are valid when they match the workspace convention or user request.\n\
+             - If no workspace convention is visible, say so and fall back to HOI4-readable defaults.\n\
              - Surface assumptions before generating files.\n\
              - Use the local RHoiScribe knowledge resources before web search.",
             mode = prompt.mode,

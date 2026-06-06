@@ -99,9 +99,9 @@ localisation dry-run 用の `tools/call` 引数例:
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
-  "key_prefix": "MYMOD",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
+  "key_prefix": "CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -117,8 +117,8 @@ Write mode では Mod output root を追加します。
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -131,6 +131,7 @@ Write mode では Mod output root を追加します。
 ```
 
 write mode で生成される localisation file は UTF-8 BOM で書き込まれます。
+ユーザーの Mod がネストされた localisation folders を使っている場合は、`common/autonomy/CHI` のような `file_stem`、または `localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml` のような完全な mod-relative path を使えます。
 
 ## 出力モデル
 
@@ -141,7 +142,7 @@ Generation tools は構造化された file plan を返します。
   "dry_run": true,
   "files": [
     {
-      "path": "localisation/english/my_mod_focuses_l_english.yml",
+      "path": "localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml",
       "encoding": "utf-8-bom",
       "summary": "HOI4 localisation file"
     }
@@ -150,10 +151,4 @@ Generation tools は構造化された file plan を返します。
 }
 ```
 
-Paths は Mod 相対です。安全でない path、drive prefix 付き path、directory traversal は書き込み前に拒否されます。
-
-## プロジェクト形態
-
-RHoiScribe は Rust と `rmcp` で構築され、stdio transport を使います。Runtime resources はリポジトリからバンドルされるため、設定済みクライアントは live network access なしで prompts、resources、tools を読めます。
-
-現在のリリース形態は実用性を優先しています。まず agent-facing knowledge base と一般的な HOI4 files の batch generators を提供し、その後 deeper semantic validation と full mod production workflows 向けの richer generators へ拡張します。
+Paths は Mod 相対です。ユーザーの workspace に合う場合は、HOI4-readable なネストされた folders を使えます。安全でない path、drive prefix 付き path、directory traversal は書き込み前に拒否されます。

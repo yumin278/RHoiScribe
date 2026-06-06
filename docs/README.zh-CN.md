@@ -99,9 +99,9 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
-  "key_prefix": "MYMOD",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
+  "key_prefix": "CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -117,8 +117,8 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -131,6 +131,7 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
 ```
 
 写入模式下生成的本地化文件会使用 UTF-8 BOM。
+当用户 Mod 已经使用嵌套本地化目录时，可以使用 `common/autonomy/CHI` 这样的 `file_stem`，也可以使用 `localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml` 这样的完整 Mod 相对路径。
 
 ## 输出模型
 
@@ -141,7 +142,7 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
   "dry_run": true,
   "files": [
     {
-      "path": "localisation/english/my_mod_focuses_l_english.yml",
+      "path": "localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml",
       "encoding": "utf-8-bom",
       "summary": "HOI4 localisation file"
     }
@@ -150,10 +151,4 @@ rhoiscribe://hoi4/knowledge/scripted_gui.dynamic_lists
 }
 ```
 
-路径是 Mod 相对路径。不安全路径、带盘符路径和目录穿越会在写入前被拒绝。
-
-## 项目形态
-
-RHoiScribe 使用 Rust 和 `rmcp` 构建，传输方式为 stdio。运行时资源从仓库内置内容提供，因此配置好的客户端无需实时联网即可读取 prompts、resources 和 tools。
-
-当前版本形态偏实用：先提供 agent-facing 知识库和常见 HOI4 文件的批量生成器，再逐步扩展到更深的语义验证和更丰富的完整 Mod 生产工作流。
+路径是 Mod 相对路径；当它符合用户工作区规范时，可以使用 HOI4 可读取的嵌套目录。不安全路径、带盘符路径和目录穿越会在写入前被拒绝。

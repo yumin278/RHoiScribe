@@ -99,9 +99,9 @@ Example `tools/call` arguments for a localisation dry run:
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
-  "key_prefix": "MYMOD",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
+  "key_prefix": "CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -117,8 +117,8 @@ Write mode adds a mod output root:
 
 ```json
 {
-  "language": "l_english",
-  "file_stem": "my_mod_focuses",
+  "language": "l_simp_chinese",
+  "file_stem": "common/autonomy/CHI",
   "entries": [
     {
       "id": "industrial_recovery",
@@ -131,6 +131,7 @@ Write mode adds a mod output root:
 ```
 
 The generated localisation file is written with UTF-8 BOM when write mode is enabled.
+Use `file_stem` values such as `common/autonomy/CHI`, or complete mod-relative paths such as `localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml`, when the user's mod already organizes localisation in nested folders.
 
 ## Output Model
 
@@ -141,7 +142,7 @@ Generation tools return structured file plans:
   "dry_run": true,
   "files": [
     {
-      "path": "localisation/english/my_mod_focuses_l_english.yml",
+      "path": "localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml",
       "encoding": "utf-8-bom",
       "summary": "HOI4 localisation file"
     }
@@ -149,11 +150,4 @@ Generation tools return structured file plans:
   "messages": ["dry-run only; no files were written"]
 }
 ```
-
-Paths are mod-relative. Unsafe paths, drive-prefixed paths, and traversal attempts are rejected before writing.
-
-## Project Shape
-
-RHoiScribe is built in Rust with `rmcp` and uses stdio transport. Runtime resources are bundled from the repository, so a configured client can read prompts, resources, and tools without live network access.
-
-The current release shape is intentionally practical: it provides an agent-facing knowledge base and batch generators for common HOI4 files first, then can grow toward deeper semantic validation and richer generators for full mod production workflows.
+Paths are mod-relative and can use nested HOI4-readable folders when they match the user's workspace. Unsafe paths, drive-prefixed paths, and traversal attempts are rejected before writing.

@@ -118,4 +118,4 @@ After adding the server to a client, ask the client to list MCP resources and re
 rhoiscribe://hoi4/knowledge/catalog
 ```
 
-Then call `generate_localisation_batch` with `dry_run = true` before allowing write mode. The returned file path should stay under `localisation/<language>/` and the encoding should be `utf-8-bom`.
+Then call `generate_localisation_batch` with `dry_run = true` before allowing write mode. The returned file path should stay under a valid `localisation/<language>/` tree, including nested subdirectories when they match the user's mod, and the encoding should be `utf-8-bom`.

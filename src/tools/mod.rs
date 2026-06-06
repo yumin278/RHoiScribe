@@ -10,7 +10,7 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "generate_localisation_batch",
         title: "Generate localisation batch",
-        description: "Generate a HOI4 localisation yml file, using UTF-8 BOM when writing.",
+        description: "Generate a HOI4 localisation yml file, using UTF-8 BOM when writing. file_stem may include subdirectories or a complete mod-relative localisation path.",
         required: &["language", "file_stem", "entries", "dry_run"],
     },
     ToolSpec {
@@ -229,10 +229,7 @@ impl ToolEngine {
         request: LocalisationBatchRequest,
     ) -> Result<ToolExecutionResult, ToolError> {
         let language_dir = language_directory(&request.language);
-        let path = format!(
-            "localisation/{}/{}_{}.yml",
-            language_dir, request.file_stem, request.language
-        );
+        let path = localisation_path(&language_dir, &request.file_stem, &request.language);
         let mut content = format!("{}:\n", request.language);
 
         for entry in &request.entries {
@@ -495,6 +492,30 @@ fn invalid_path_reason(path: &str) -> Option<String> {
 
 fn language_directory(language: &str) -> String {
     language.strip_prefix("l_").unwrap_or(language).to_string()
+}
+
+fn localisation_path(language_dir: &str, file_stem: &str, language: &str) -> String {
+    let normalized_stem = file_stem
+        .replace('\\', "/")
+        .trim_matches('/')
+        .trim_end_matches(".yml")
+        .to_string();
+
+    let localized_stem = with_language_suffix(&normalized_stem, language);
+
+    if localized_stem.starts_with("localisation/") {
+        format!("{}.yml", localized_stem)
+    } else {
+        format!("localisation/{}/{}.yml", language_dir, localized_stem)
+    }
+}
+
+fn with_language_suffix(stem: &str, language: &str) -> String {
+    if stem.ends_with(&format!("_{}", language)) {
+        stem.to_string()
+    } else {
+        format!("{}_{}", stem, language)
+    }
 }
 
 fn localised_key(prefix: &Option<String>, id: &str) -> String {

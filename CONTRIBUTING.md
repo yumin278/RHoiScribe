@@ -12,10 +12,13 @@ RHoiScribe is a local MCP server for HOI4 modding agents. Contributions should k
 
 2. Keep changes scoped to one concern: prompts, resources, tools, documentation, or packaging.
 
-3. Run the full verification gate before submitting a change:
+3. Run the verification commands before submitting a change:
 
    ```powershell
-   .\scripts\verify.ps1
+   cargo fmt --check
+   cargo clippy --all-targets --all-features -- -D warnings
+   cargo test
+   cargo build --release
    ```
 
 4. Use Conventional Commits for commits:
