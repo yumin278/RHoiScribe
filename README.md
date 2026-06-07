@@ -102,6 +102,12 @@ Generation tools support dry-run previews. In write mode they require an `output
 Knowledge search returns matching topic IDs and MCP resource URIs for queries such as `mtth variables`, `decision mission blocks`, or `on_actions FROM.FROM`.
 Identifier scanning checks batches of proposed new IDs against structured HOI4 definitions and reports duplicates, existing output files, and `replace_path` risks.
 
+<h2 align="center">Help Improve RHoiScribe</h2>
+
+HOI4 syntax and modding practice change over time. If you find bundled knowledge that is outdated, incomplete, or wrong, please open an [Issue](https://github.com/czxieddan/RHoiScribe/issues) with the game version, file type, source reference, and a minimal example when possible.
+
+Pull requests are welcome for expanding the knowledge catalog, improving examples, or building more MCP tools for generation, validation, project scanning, and other agent workflows.
+
 <h2 align="center">Quick Start</h2>
 
 Build the server:

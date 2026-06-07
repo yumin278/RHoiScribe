@@ -102,6 +102,12 @@ Agents 可以调用工具进行可重复的生成和验证：
 知识搜索会为 `mtth variables`、`decision mission blocks`、`on_actions FROM.FROM` 这类查询返回匹配 topic ID 和 MCP resource URI。
 唯一 ID 扫描会按结构化 HOI4 定义批量检查候选新 ID，并报告重复、已有输出文件和 `replace_path` 风险。
 
+<h2 align="center">帮助改进 RHoiScribe</h2>
+
+HOI4 语法和 Modding 实践会随着游戏版本持续变化。如果你发现内置知识过时、不完整或存在错误，请通过 [Issue](https://github.com/czxieddan/RHoiScribe/issues) 告诉我们；最好同时提供游戏版本、文件类型、来源引用和可复现的最小示例。
+
+也欢迎通过 Pull Request 扩展知识目录、改进示例，或开发更多面向生成、验证、项目扫描和 agent 工作流的 MCP 工具。
+
 <h2 align="center">快速开始</h2>
 
 构建服务器：
