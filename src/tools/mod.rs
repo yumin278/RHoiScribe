@@ -1,3 +1,5 @@
+mod unique_scan;
+
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path};
 
 use rmcp::model::{CallToolResult, JsonObject, Tool, ToolAnnotations};
@@ -5,6 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::resources::{KNOWLEDGE_TOPIC_URI_PREFIX, KnowledgeCatalog};
+
+pub use unique_scan::{
+    CandidateScanResult, IdentifierCandidate, IdentifierMatch, PathRisk, ScanRoot,
+    UniqueIdentifierScanRequest, UniqueIdentifierScanResult,
+};
 
 pub const MODULE_PURPOSE: &str = "batch generation and validation tools";
 
@@ -38,6 +45,12 @@ const TOOL_SPECS: &[ToolSpec] = &[
         title: "Search HOI4 knowledge",
         description: "Search bundled HOI4 modding knowledge topics and return matching MCP resource URIs.",
         required: &["query"],
+    },
+    ToolSpec {
+        name: "scan_unique_identifiers",
+        title: "Scan unique identifiers",
+        description: "Concurrently scan mod and game roots for structured HOI4 identifiers before creating new IDs, and report duplicate, overwrite, and replace_path risks.",
+        required: &["roots", "candidates"],
     },
     ToolSpec {
         name: "validate_hoi4_paths",
@@ -227,6 +240,12 @@ impl ToolCatalog {
                     ToolEngine::search_hoi4_knowledge(request)?
                 )))
             }
+            "scan_unique_identifiers" => {
+                let request = parse_arguments::<UniqueIdentifierScanRequest>(arguments)?;
+                Ok(CallToolResult::structured(json!(
+                    ToolEngine::scan_unique_identifiers(request)?
+                )))
+            }
             "validate_hoi4_paths" => {
                 let request = parse_arguments::<ValidateHoi4PathsRequest>(arguments)?;
                 Ok(CallToolResult::structured(json!(
@@ -403,6 +422,12 @@ impl ToolEngine {
             query: request.query,
             matches,
         })
+    }
+
+    pub fn scan_unique_identifiers(
+        request: UniqueIdentifierScanRequest,
+    ) -> Result<UniqueIdentifierScanResult, ToolError> {
+        unique_scan::scan_unique_identifiers(request).map_err(ToolError::InvalidRequest)
     }
 
     pub fn validate_hoi4_paths(request: ValidateHoi4PathsRequest) -> PathValidationResult {

@@ -83,7 +83,7 @@ Agents can read local resources instead of starting from a blank prompt:
 - `rhoiscribe://hoi4/knowledge/catalog`
 - `rhoiscribe://hoi4/knowledge/<topic_id>`
 
-The knowledge catalog is structured for agent use. Topics contain category, file types, tags, syntax examples, relationships to other HOI4 systems, validation guidance, and source references. Current coverage includes script basics, scopes, triggers, effects, modifiers, variables, MTTH variables, arrays, localisation, scripted localisation, scripted triggers/effects, GUI, scripted GUI, focuses, events, detailed on_action scope families, decisions, missions, ideas, characters, history, map files, technology, equipment, units, AI, diplomacy, game rules, defines, bookmarks, audio, and common loading errors.
+The knowledge catalog is structured for agent use. Topics contain category, file types, tags, syntax examples, relationships to other HOI4 systems, validation guidance, and source references. Current coverage includes script basics, scopes, triggers, effects, modifiers, variables, MTTH variables, unique identifier checks, arrays, localisation, scripted localisation, scripted triggers/effects, GUI, scripted GUI, focuses, events, detailed on_action scope families, decisions, missions, ideas, characters, history, map files, technology, equipment, units, AI, diplomacy, game rules, defines, bookmarks, audio, and common loading errors.
 
 <h3 align="center">Tools</h3>
 
@@ -94,11 +94,13 @@ Agents can call tools for repeatable generation and validation:
 - `generate_event_batch`
 - `generate_decision_batch`
 - `search_hoi4_knowledge`
+- `scan_unique_identifiers`
 - `validate_hoi4_paths`
 - `format_paradox_script`
 
 Generation tools support dry-run previews. In write mode they require an `output_root` and write paths relative to the target mod root.
 Knowledge search returns matching topic IDs and MCP resource URIs for queries such as `mtth variables`, `decision mission blocks`, or `on_actions FROM.FROM`.
+Identifier scanning checks batches of proposed new IDs against structured HOI4 definitions and reports duplicates, existing output files, and `replace_path` risks.
 
 <h2 align="center">Quick Start</h2>
 

@@ -83,7 +83,7 @@ Agents 可以读取本地资源，而不是从空白提示开始：
 - `rhoiscribe://hoi4/knowledge/catalog`
 - `rhoiscribe://hoi4/knowledge/<topic_id>`
 
-知识目录为 agent 使用而结构化。Topic 包含分类、文件类型、标签、语法示例、与其他 HOI4 系统的关系、验证建议和来源引用。当前覆盖脚本基础、scope、trigger、effect、modifier、变量、MTTH 变量、数组、本地化、scripted localisation、scripted triggers/effects、GUI、scripted GUI、国策、事件、细分 on_action scope 家族、决议、任务、理念、角色、历史、地图文件、科技、装备、单位、AI、外交、游戏规则、defines、书签、音频和常见加载错误。
+知识目录为 agent 使用而结构化。Topic 包含分类、文件类型、标签、语法示例、与其他 HOI4 系统的关系、验证建议和来源引用。当前覆盖脚本基础、scope、trigger、effect、modifier、变量、MTTH 变量、唯一 ID 检查、数组、本地化、scripted localisation、scripted triggers/effects、GUI、scripted GUI、国策、事件、细分 on_action scope 家族、决议、任务、理念、角色、历史、地图文件、科技、装备、单位、AI、外交、游戏规则、defines、书签、音频和常见加载错误。
 
 <h3 align="center">Tools</h3>
 
@@ -94,11 +94,13 @@ Agents 可以调用工具进行可重复的生成和验证：
 - `generate_event_batch`
 - `generate_decision_batch`
 - `search_hoi4_knowledge`
+- `scan_unique_identifiers`
 - `validate_hoi4_paths`
 - `format_paradox_script`
 
 生成工具支持 dry-run 预览。写入模式需要 `output_root`，并且只按目标 Mod 根目录的相对路径写入。
 知识搜索会为 `mtth variables`、`decision mission blocks`、`on_actions FROM.FROM` 这类查询返回匹配 topic ID 和 MCP resource URI。
+唯一 ID 扫描会按结构化 HOI4 定义批量检查候选新 ID，并报告重复、已有输出文件和 `replace_path` 风险。
 
 <h2 align="center">快速开始</h2>
 

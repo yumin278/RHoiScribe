@@ -200,6 +200,7 @@ impl PromptCatalog {
              - Produce game-readable HOI4 mod content only.\n\
              - Priority order: current user request, then conventions discovered in the user's workspace, then bundled RHoiScribe resources, then official HOI4 defaults.\n\
              - Before choosing paths or names, inspect available workspace files and mirror existing folder depth, filename suffixes, tag prefixes, variable names, focus IDs, event namespaces, idea IDs, GUI element names, and localisation key style.\n\
+             - Before creating new unique identifiers such as TAGs, focus IDs, shared or joint focus IDs, idea tokens, dynamic modifiers, country/global/state/character/MIO/project flags, variables, event namespaces, decisions, characters, scripted effects, or scripted triggers, call scan_unique_identifiers with intent=create. Use intent=reference when the user asks to reuse existing content.\n\
              - Do not force flat localisation paths. Nested paths such as localisation/simp_chinese/common/autonomy/CHI_l_simp_chinese.yml are valid when they match the workspace convention or user request.\n\
              - If no workspace convention is visible, say so and fall back to HOI4-readable defaults.\n\
              - Surface assumptions before generating files.\n\
