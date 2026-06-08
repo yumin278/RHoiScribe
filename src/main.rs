@@ -10,5 +10,9 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", rhoiscribe::cli::version_text());
             Ok(())
         }
+        rhoiscribe::cli::CliCommand::PrintCommand => {
+            println!("{}", rhoiscribe::cli::command_path()?.display());
+            Ok(())
+        }
     }
 }

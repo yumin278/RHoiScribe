@@ -110,28 +110,44 @@ Pull requests приветствуются для расширения knowledge
 
 <h2 align="center">Быстрый старт</h2>
 
-Соберите сервер:
+Скачайте готовый binary из [GitHub Releases](https://github.com/czxieddan/RHoiScribe/releases):
+
+- Windows: `rhoiscribe-windows-x86_64.exe`
+- Linux: `rhoiscribe-linux-x86_64`
+- macOS: `rhoiscribe-macos-universal`
+
+Поместите скачанный файл в постоянную папку. В Linux и macOS выполните `chmod +x` для скачанного файла, если система просит разрешение на запуск.
+
+Собирайте из исходников только если нужен локальный Cargo build:
 
 ```powershell
 cargo build --release
 ```
 
-Укажите release binary в MCP-клиенте:
+Source build помещает исполняемый файл в `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/`.
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe
+Выведите path, который нужно указать в поле `command` MCP-клиента:
+
+```powershell
+.\rhoiscribe-windows-x86_64.exe --print-command
 ```
 
-Для Linux и macOS:
+В Linux и macOS используйте тот же option для скачанного файла:
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe
+```bash
+./rhoiscribe-linux-x86_64 --print-command
+./rhoiscribe-macos-universal --print-command
 ```
 
 Запускайте напрямую только если хотите вручную стартовать stdio MCP server:
 
 ```powershell
-.\target\release\rhoiscribe.exe
+.\rhoiscribe-windows-x86_64.exe
+```
+
+```bash
+./rhoiscribe-linux-x86_64
+./rhoiscribe-macos-universal
 ```
 
 Примеры конфигурации для Codex, Claude Code и generic MCP см. в [client-setup.md](client-setup.md).

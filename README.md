@@ -110,28 +110,44 @@ Pull requests are welcome for expanding the knowledge catalog, improving example
 
 <h2 align="center">Quick Start</h2>
 
-Build the server:
+Download a prebuilt binary from [GitHub Releases](https://github.com/czxieddan/RHoiScribe/releases):
+
+- Windows: `rhoiscribe-windows-x86_64.exe`
+- Linux: `rhoiscribe-linux-x86_64`
+- macOS: `rhoiscribe-macos-universal`
+
+Keep the downloaded file in a stable folder. On Linux and macOS, run `chmod +x` on the downloaded file if the system asks for executable permission.
+
+Build from source only when you want a local Cargo build:
 
 ```powershell
 cargo build --release
 ```
 
-Use the release binary in your MCP client:
+Source builds place the executable under `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/`.
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe
+Print the command path to use in your MCP client:
+
+```powershell
+.\rhoiscribe-windows-x86_64.exe --print-command
 ```
 
-Linux and macOS clients should use:
+Linux and macOS users can run the same option on their downloaded file:
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe
+```bash
+./rhoiscribe-linux-x86_64 --print-command
+./rhoiscribe-macos-universal --print-command
 ```
 
 Run it directly only when you want to start the stdio MCP server by hand:
 
 ```powershell
-.\target\release\rhoiscribe.exe
+.\rhoiscribe-windows-x86_64.exe
+```
+
+```bash
+./rhoiscribe-linux-x86_64
+./rhoiscribe-macos-universal
 ```
 
 For Codex, Claude Code, and generic MCP configuration examples, see [docs/client-setup.md](docs/client-setup.md).

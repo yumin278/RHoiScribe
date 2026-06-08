@@ -110,28 +110,44 @@ HOI4 语法和 Modding 实践会随着游戏版本持续变化。如果你发现
 
 <h2 align="center">快速开始</h2>
 
-构建服务器：
+从 [GitHub Releases](https://github.com/czxieddan/RHoiScribe/releases) 下载预构建二进制文件：
+
+- Windows: `rhoiscribe-windows-x86_64.exe`
+- Linux: `rhoiscribe-linux-x86_64`
+- macOS: `rhoiscribe-macos-universal`
+
+把下载的文件放在一个稳定目录。Linux 和 macOS 如果提示没有执行权限，对下载文件运行 `chmod +x`。
+
+只有当你需要本地 Cargo 构建时才从源码构建：
 
 ```powershell
 cargo build --release
 ```
 
-在你的 MCP 客户端中使用 release binary：
+源码构建会把可执行文件放在 `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/` 下。
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe
+打印 MCP 客户端里 `command` 应填写的路径：
+
+```powershell
+.\rhoiscribe-windows-x86_64.exe --print-command
 ```
 
-Linux 和 macOS 使用：
+Linux 和 macOS 对下载文件执行同一个参数：
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe
+```bash
+./rhoiscribe-linux-x86_64 --print-command
+./rhoiscribe-macos-universal --print-command
 ```
 
 只有当你想手动启动 stdio MCP server 时，才需要直接运行：
 
 ```powershell
-.\target\release\rhoiscribe.exe
+.\rhoiscribe-windows-x86_64.exe
+```
+
+```bash
+./rhoiscribe-linux-x86_64
+./rhoiscribe-macos-universal
 ```
 
 Codex、Claude Code 和通用 MCP 配置示例见 [client-setup.md](client-setup.md)。

@@ -2,7 +2,15 @@
 
 RHoiScribe is a local MCP server launched through stdio. It is intended for Codex, Claude Code, and other MCP-compatible clients that can start a local stdio command.
 
-Build the release binary first:
+Download a prebuilt binary from [GitHub Releases](https://github.com/czxieddan/RHoiScribe/releases):
+
+- Windows: `rhoiscribe-windows-x86_64.exe`
+- Linux: `rhoiscribe-linux-x86_64`
+- macOS: `rhoiscribe-macos-universal`
+
+Keep the downloaded file in a stable folder. On Linux and macOS, run `chmod +x` on the downloaded file if the system asks for executable permission.
+
+Build from source only when you want a local Cargo build:
 
 ```powershell
 cargo build --release
@@ -10,14 +18,35 @@ cargo build --release
 
 Use placeholders in docs and committed examples. Replace them only in your private client configuration:
 
+- `<RHOISCRIBE_COMMAND>`: absolute path printed by `--print-command`.
 - `<ABSOLUTE_PATH_TO_RHOISCRIBE>`: absolute path to this repository on the user's machine.
 - `<MOD_OUTPUT_ROOT>`: absolute path to a HOI4 mod folder when a generation tool writes files.
 
-Default binary paths:
+Print the command path:
 
-- Windows: `<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe`
-- Linux: `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe`
-- macOS: `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe`
+```powershell
+.\rhoiscribe-windows-x86_64.exe --print-command
+```
+
+Linux:
+
+```bash
+./rhoiscribe-linux-x86_64 --print-command
+```
+
+macOS:
+
+```bash
+./rhoiscribe-macos-universal --print-command
+```
+
+Expected binary paths:
+
+- Prebuilt Windows: `<ABSOLUTE_PATH_TO_RHOISCRIBE>\rhoiscribe-windows-x86_64.exe`
+- Prebuilt Linux: `<ABSOLUTE_PATH_TO_RHOISCRIBE>/rhoiscribe-linux-x86_64`
+- Prebuilt macOS: `<ABSOLUTE_PATH_TO_RHOISCRIBE>/rhoiscribe-macos-universal`
+- Local Cargo build on Windows: `<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe`
+- Local Cargo build on Linux or macOS: `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe`
 
 ## Codex
 
@@ -25,15 +54,15 @@ Add RHoiScribe to the Codex MCP server configuration using the release binary as
 
 ```toml
 [mcp_servers.rhoiscribe]
-command = "<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe"
+command = "<RHOISCRIBE_COMMAND>"
 args = []
 ```
 
-For Windows:
+For Windows TOML strings, escape backslashes or use a path style accepted by your client:
 
 ```toml
 [mcp_servers.rhoiscribe]
-command = "<ABSOLUTE_PATH_TO_RHOISCRIBE>\\target\\release\\rhoiscribe.exe"
+command = "<RHOISCRIBE_COMMAND>"
 args = []
 ```
 
@@ -47,20 +76,20 @@ Claude Code can register local stdio MCP servers from its MCP configuration or C
 {
   "mcpServers": {
     "rhoiscribe": {
-      "command": "<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe",
+      "command": "<RHOISCRIBE_COMMAND>",
       "args": []
     }
   }
 }
 ```
 
-For Windows:
+For Windows JSON strings, escape backslashes:
 
 ```json
 {
   "mcpServers": {
     "rhoiscribe": {
-      "command": "<ABSOLUTE_PATH_TO_RHOISCRIBE>\\target\\release\\rhoiscribe.exe",
+      "command": "<RHOISCRIBE_COMMAND>",
       "args": []
     }
   }
@@ -70,7 +99,7 @@ For Windows:
 CLI-style registration can use the same command path:
 
 ```powershell
-claude mcp add rhoiscribe -- <ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe
+claude mcp add rhoiscribe -- <RHOISCRIBE_COMMAND>
 ```
 
 ## Generic MCP JSON
@@ -81,7 +110,7 @@ Many MCP clients accept a server map with `command` and `args` fields:
 {
   "mcpServers": {
     "rhoiscribe": {
-      "command": "<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe",
+      "command": "<RHOISCRIBE_COMMAND>",
       "args": []
     }
   }
@@ -94,7 +123,7 @@ Windows clients usually need the `.exe` path and escaped backslashes in JSON:
 {
   "mcpServers": {
     "rhoiscribe": {
-      "command": "<ABSOLUTE_PATH_TO_RHOISCRIBE>\\target\\release\\rhoiscribe.exe",
+      "command": "<RHOISCRIBE_COMMAND>",
       "args": []
     }
   }

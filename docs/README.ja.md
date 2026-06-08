@@ -110,28 +110,44 @@ Knowledge catalog の拡張、examples の改善、生成、検証、project sca
 
 <h2 align="center">クイックスタート</h2>
 
-サーバーをビルドします。
+[GitHub Releases](https://github.com/czxieddan/RHoiScribe/releases) から prebuilt binary をダウンロードします。
+
+- Windows: `rhoiscribe-windows-x86_64.exe`
+- Linux: `rhoiscribe-linux-x86_64`
+- macOS: `rhoiscribe-macos-universal`
+
+ダウンロードしたファイルは、移動しない安定したフォルダーに置いてください。Linux と macOS で実行権限を求められた場合は、ダウンロードしたファイルに `chmod +x` を実行します。
+
+ローカル Cargo build が必要な場合だけ source からビルドします。
 
 ```powershell
 cargo build --release
 ```
 
-MCP クライアントで release binary を指定します。
+Source build では executable が `<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/` に置かれます。
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>\target\release\rhoiscribe.exe
+MCP クライアントの `command` に入れる path を表示します。
+
+```powershell
+.\rhoiscribe-windows-x86_64.exe --print-command
 ```
 
-Linux と macOS では次を使います。
+Linux と macOS では、ダウンロードしたファイルで同じ option を実行します。
 
-```text
-<ABSOLUTE_PATH_TO_RHOISCRIBE>/target/release/rhoiscribe
+```bash
+./rhoiscribe-linux-x86_64 --print-command
+./rhoiscribe-macos-universal --print-command
 ```
 
 stdio MCP server を手動で起動したい場合だけ直接実行します。
 
 ```powershell
-.\target\release\rhoiscribe.exe
+.\rhoiscribe-windows-x86_64.exe
+```
+
+```bash
+./rhoiscribe-linux-x86_64
+./rhoiscribe-macos-universal
 ```
 
 Codex、Claude Code、汎用 MCP 設定例は [client-setup.md](client-setup.md) を参照してください。
