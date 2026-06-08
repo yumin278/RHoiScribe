@@ -76,8 +76,8 @@ fn resource_compilers() -> Vec<PathBuf> {
 }
 
 fn windows_resource_script(icon_path: &Path) -> String {
-    let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.1.0".to_string());
-    let version_tuple = version_tuple(&version);
+    let version = env!("CARGO_PKG_VERSION");
+    let version_tuple = version_tuple(version);
     let version_string = format!("{}.0", version);
     let icon = rc_string(&icon_path.display().to_string());
 

@@ -124,6 +124,11 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout release history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download Windows asset
         uses: actions/download-artifact@v4
         with:
@@ -142,6 +147,43 @@ jobs:
           name: release-macos
           path: dist
 
+      - name: Generate release notes
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || true)"
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            CHANGE_RANGE="$PREVIOUS_TAG..$TAG_NAME"
+            CHANGE_HEADING="Changes since \`$PREVIOUS_TAG\`:"
+          else
+            CHANGE_RANGE="$TAG_NAME"
+            CHANGE_HEADING="Included changes:"
+          fi
+
+          {
+            echo "## RHoiScribe $TAG_NAME"
+            echo
+            echo "RHoiScribe is a local MCP server for Hearts of Iron IV modding agents. Download the file for your platform, keep it in a stable folder, and use its path as the MCP server command."
+            echo
+            echo "### Downloads"
+            echo
+            echo "- Windows x86_64: \`rhoiscribe-windows-x86_64.exe\`"
+            echo "- Linux x86_64: \`rhoiscribe-linux-x86_64\`"
+            echo "- macOS universal: \`rhoiscribe-macos-universal\`"
+            echo
+            echo "On Linux or macOS, run \`chmod +x <downloaded-file>\` if your system asks for executable permission."
+            echo
+            echo "To print the command path for your MCP client, run the downloaded file with \`--print-command\`."
+            echo
+            echo "### Changes"
+            echo
+            echo "$CHANGE_HEADING"
+            git log --no-merges --pretty=format:'- %s (%h)' "$CHANGE_RANGE"
+            echo
+          } > release-notes.md
+
       - name: Publish release assets
         shell: bash
         env:
@@ -152,7 +194,12 @@ jobs:
             gh release create "$TAG_NAME" \
               --repo "$GITHUB_REPOSITORY" \
               --title "RHoiScribe $TAG_NAME" \
-              --notes "Automated RHoiScribe release build."
+              --notes-file release-notes.md
+          else
+            gh release edit "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "RHoiScribe $TAG_NAME" \
+              --notes-file release-notes.md
           fi
 
           gh release upload "$TAG_NAME" \

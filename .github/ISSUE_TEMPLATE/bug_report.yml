@@ -33,7 +33,7 @@ body:
     attributes:
       label: RHoiScribe version or commit
       description: Use `rhoiscribe --version`, the release tag, or the commit SHA you built from.
-      placeholder: "0.1.0, v0.1.0, or commit SHA"
+      placeholder: "release tag, version output, or commit SHA"
     validations:
       required: true
 
