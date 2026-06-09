@@ -81,7 +81,7 @@
       "body": "Effects mutate game state. They appear in focus rewards, event options, decisions, on_actions, scripted effects, history setup, and GUI clicks. Generated effects should be minimal, scoped, and idempotent when possible.",
       "syntax_blocks": ["completion_reward = { add_political_power = 50 }", "option = { add_stability = 0.05 }", "set_country_flag = my_flag"],
       "relationships": ["Effects are guarded by triggers; scripted_effects share reusable effect chains; on_actions run effects in event-driven contexts."],
-      "validation": ["Check whether an effect is country, state, character, or unit scoped.", "Avoid repeated additive effects unless the trigger prevents repetition.", "Name flags and variables with mod prefixes."],
+      "validation": ["Check whether an effect is country, state, character, or unit scoped.", "Avoid repeated additive effects unless the trigger prevents repetition.", "Name flags and variables with mod prefixes.", "Hide helper-only triggers, effects, or calculation modifiers from player-facing UI whenever the file type supports a hidden form."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Effects", "https://hoi4doc.dev"]
     },
     {
@@ -93,7 +93,7 @@
       "body": "Modifiers alter values rather than directly running effects. They are used in ideas, traits, states, technologies, equipment, decisions, dynamic modifiers, opinion modifiers, and scripted contexts. Generated modifiers must use valid modifier keys for the target owner.",
       "syntax_blocks": ["modifier = { political_power_gain = 0.1 }", "state_modifier = { local_resources_factor = 0.1 }", "dynamic_modifier = { modifier = { stability_factor = 0.05 } }"],
       "relationships": ["Ideas and traits wrap modifiers; dynamic modifiers are attached by effects; technologies and equipment use modifiers for gameplay values."],
-      "validation": ["Do not mix state-only and country-only modifiers.", "Prefer small numeric values with explicit sign.", "Use HOI4DOC or wiki lookup before adding unfamiliar modifier keys."],
+      "validation": ["Do not mix state-only and country-only modifiers.", "Prefer small numeric values with explicit sign.", "Use HOI4DOC or wiki lookup before adding unfamiliar modifier keys.", "Hide helper-only triggers, effects, or calculation modifiers from player-facing UI whenever the file type supports a hidden form."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Modifiers", "https://hoi4doc.dev"]
     },
     {
@@ -125,11 +125,11 @@
       "title": "Unique identifiers, creation intent, and duplicate checks",
       "category": "script",
       "file_types": ["txt", "mod", "yml"],
-      "tags": ["unique_id", "focus_id", "shared_focus", "joint_focus", "focus_tree", "country_tag", "idea_token", "dynamic_modifier", "country_flag", "global_flag", "state_flag", "character_flag", "mio_flag", "project_flag", "variable", "replace_path", "overwrite"],
-      "body": "Before creating a new role, scope-aware flag, TAG, idea token, dynamic modifier, focus, decision, event namespace, scripted effect, scripted trigger, character, or other reusable identifier, agents should run a structured uniqueness scan across the user's mod root and any configured game root. Only creation intent should be treated as a duplicate risk; when the user asks to reference existing content, the same match is informational. Focus IDs need special handling: focus = { id = ... }, shared_focus = { id = ... }, joint_focus = { id = ... }, and shared_focus/joint_focus references are focus ID matches, while focus_tree = { id = ... } is a focus tree ID and must not be confused with a focus node ID. Flag checks should distinguish country_flag, global_flag, state_flag, character_flag, mio_flag, and project_flag; unit_leader_flag is treated as the legacy character flag family.",
+      "tags": ["unique_id", "focus_id", "shared_focus", "joint_focus", "focus_tree", "country_tag", "idea_token", "dynamic_modifier", "country_flag", "global_flag", "state_flag", "character_flag", "mio_flag", "project_flag", "variable", "replace_path", "overwrite", "ascii_identifiers"],
+      "body": "Before creating a new role, scope-aware flag, TAG, idea token, dynamic modifier, focus, decision, event namespace, scripted effect, scripted trigger, character, or other reusable identifier, agents should run a structured uniqueness scan across the user's mod root and any configured game root. Only creation intent should be treated as a duplicate risk; when the user asks to reference existing content, the same match is informational. Focus IDs need special handling: focus = { id = ... }, shared_focus = { id = ... }, joint_focus = { id = ... }, and shared_focus/joint_focus references are focus ID matches, while focus_tree = { id = ... } is a focus tree ID and must not be confused with a focus node ID. Flag checks should distinguish country_flag, global_flag, state_flag, character_flag, mio_flag, and project_flag; unit_leader_flag is treated as the legacy character flag family. Generated file names, folder names, script identifiers, idea tokens, focus IDs, event IDs, variables, flags, OOB division names, and similar machine-readable tokens should stay ASCII-only; localisation prose and visible player text are the normal exceptions.",
       "syntax_blocks": ["scan_unique_identifiers roots=[{ path=<MOD_ROOT>, role=mod }, { path=<GAME_ROOT>, role=game }] candidates=[{ entity_type=focus_id, value=TAG_reform_army, intent=create }]", "focus = { id = TAG_reform_army }", "shared_focus = { id = TAG_shared_industry }", "joint_focus = { id = TAG_joint_research }", "focus_tree = { id = TAG_focus_tree }", "replace_path=\"common/national_focus\""],
       "relationships": ["Same-file overwrite risk is separate from identifier duplication; planned output paths should be checked against the mod root before writing.", "descriptor.mod and .mod replace_path declarations can hide vanilla folders and should be surfaced whenever planned paths sit below replaced folders.", "Country tags are defined structurally in common/country_tags, not by every textual appearance of TAG.", "Flags and variables are usage-defined in script and should be scanned through structured effect/trigger keys such as set_country_flag, has_character_flag, modify_mio_flag, set_project_flag, set_variable, and check_variable."],
-      "validation": ["Do not use plain global text search for uniqueness decisions.", "Batch multiple candidates in one scan so a model can check a whole focus branch or idea set before writing files.", "Report exact path, line, kind, and scope of each match.", "Treat game-root matches as compatibility/override risks and mod-root matches as duplicate or overwrite risks.", "When a duplicate is intentional, change intent to reference or ask the user to confirm an override."],
+      "validation": ["Do not use plain global text search for uniqueness decisions.", "Batch multiple candidates in one scan so a model can check a whole focus branch or idea set before writing files.", "Report exact path, line, kind, and scope of each match.", "Treat game-root matches as compatibility/override risks and mod-root matches as duplicate or overwrite risks.", "When a duplicate is intentional, change intent to reference or ask the user to confirm an override.", "Reject non-ASCII names for workspace paths and token-like fields unless the field is explicitly player-facing localisation text."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Modding", "https://hoi4.paradoxwikis.com/National_focus_modding", "https://hoi4.paradoxwikis.com/Country_creation", "https://hoi4.paradoxwikis.com/Idea_modding"]
     },
     {
@@ -162,10 +162,10 @@
       "category": "localisation",
       "file_types": ["yml"],
       "tags": ["utf8", "bom", "language", "keys", "simp_chinese", "english"],
-      "body": "HOI4 localisation yml files should be written with UTF-8 BOM. A file starts with a language root such as l_english: or l_simp_chinese:. Entries use key:0 \"Text\". Keep generated keys stable and match script identifiers where possible.",
+      "body": "HOI4 localisation yml files should be written with UTF-8 BOM. A file starts with a language root such as l_english: or l_simp_chinese:. Entries use key:0 \"Text\". Keep generated keys stable and match script identifiers where possible. Localisation is player-facing writing, not a placeholder channel: generated focus descriptions, mission text, event text, and UI text should be complete prose in the target language. If the project already has narrative or promotional prose, summarize its style and imitate it before writing new entries.",
       "syntax_blocks": ["l_english:", " my_key:0 \"Visible text\"", " my_key_desc:0 \"Description text\""],
-      "relationships": ["Script IDs usually become localisation keys; tools writing yml must preserve BOM; scripted localisation can compose dynamic text."],
-      "validation": ["Write UTF-8 BOM for yml.", "Keep one language root per file.", "Escape quotes in generated strings."],
+      "relationships": ["Script IDs usually become localisation keys; tools writing yml must preserve BOM; scripted localisation can compose dynamic text.", "Hidden triggers, hidden effects, and calculation-only modifiers should not leak into localisation as visible design notes."],
+      "validation": ["Write UTF-8 BOM for yml.", "Keep one language root per file.", "Escape quotes in generated strings.", "Do not write TODO, placeholder, draft, or design-spec wording as final localisation.", "For focus descriptions, missions, and events, provide polished prose unless the user explicitly requests terse text.", "Keep script keys ASCII even when the visible value is Chinese, Japanese, Russian, or another non-ASCII language."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Localisation"]
     },
     {
@@ -210,10 +210,10 @@
       "category": "focus",
       "file_types": ["txt", "yml", "gfx"],
       "tags": ["focus_tree", "national_focus", "completion_reward", "ai_will_do"],
-      "body": "National focus files define trees, focus nodes, prerequisites, availability, bypass logic, AI weights, and completion rewards. Generated branches need stable IDs, positions, icons, and matching localisation.",
+      "body": "National focus files define trees, focus nodes, prerequisites, availability, bypass logic, AI weights, and completion rewards. Generated branches need stable IDs, positions, icons, and matching localisation. Vanilla focus spacing is only a fallback. Before adding or reshaping a focus tree, inspect the workspace and dependency mods for interface/nationalfocusview.gui. If it exists, derive safe spacing from focus_spacing, positionType, and the actual focus icon dimensions instead of assuming x=2 and y=1. If the project state is ambiguous, ask the user before laying out a tree that could overlap.",
       "syntax_blocks": ["focus_tree = { id = TAG_01 country = { factor = 0 modifier = { add = 10 tag = TAG } } focus = { id = TAG_01_FS_00 x = 0 y = 0 cost = 10 completion_reward = { add_political_power = 50 } } }"],
-      "relationships": ["Focus IDs are localisation keys and icon suffixes.", "AI weights use triggers.", "Rewards are effects."],
-      "validation": ["Check position overlap.", "Use prerequisites or mutually_exclusive for branches.", "Keep focus IDs unique across mods."],
+      "relationships": ["Focus IDs are localisation keys and icon suffixes.", "AI weights use triggers.", "Rewards are effects.", "Custom nationalfocusview.gui changes how x/y focus coordinates map to pixels and can make vanilla spacing unsafe."],
+      "validation": ["Check position overlap.", "Use prerequisites or mutually_exclusive for branches.", "Keep focus IDs unique across mods.", "Use x=2/y=1 spacing only when no custom nationalfocusview.gui is present.", "When custom focus UI exists, calculate overlap from focus_spacing and icon dimensions before writing positions.", "Ask the user when dependency mods or GUI overrides make focus spacing ambiguous."],
       "source_refs": ["https://hoi4.paradoxwikis.com/National_focus_modding"]
     },
     {
@@ -381,7 +381,7 @@
       "body": "Decision categories group decisions; individual decisions control visibility, availability, cost, timers, removal, effects, and AI use. Generated decisions must distinguish visible from available so unavailable choices can still be intentionally shown.",
       "syntax_blocks": ["my_category = { icon = generic_decisions my_decision = { icon = generic_decision cost = 25 available = { always = yes } complete_effect = { add_political_power = -25 } } }"],
       "relationships": ["Decisions consume triggers and effects.", "Localisation keys usually match category and decision IDs."],
-      "validation": ["Use visible for display gates and available for click gates.", "Set fire_only_once or days_remove where relevant.", "Check AI weights."],
+      "validation": ["Use visible for display gates and available for click gates.", "Set fire_only_once or days_remove where relevant.", "Check AI weights.", "Hide helper-only triggers, effects, or calculation modifiers from player-facing UI whenever the file type supports a hidden form."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Decision_modding"]
     },
     {
@@ -417,7 +417,7 @@
       "body": "Idea files define national spirits, advisors, manufacturers, theorists, and other idea types. The key content is picture, allowed/visible/available logic, cost, traits, and modifier blocks.",
       "syntax_blocks": ["ideas = { country = { my_idea = { picture = my_idea modifier = { stability_factor = 0.05 } } } }"],
       "relationships": ["Ideas wrap modifiers.", "Characters can own advisor roles.", "Localisation keys match idea IDs."],
-      "validation": ["Use valid idea category.", "Keep picture key available.", "Do not mix incompatible advisor fields."],
+      "validation": ["Use valid idea category.", "Keep picture key available.", "Do not mix incompatible advisor fields.", "Hide helper-only triggers, effects, or calculation modifiers from player-facing UI whenever the file type supports a hidden form."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Idea_modding"]
     },
     {
@@ -609,7 +609,7 @@
       "body": "GUI layout files define windows and controls; GFX files register sprites and images. Generated GUI must keep element names, scripted_gui references, GFX names, and asset paths aligned.",
       "syntax_blocks": ["containerWindowType = { name = \"my_window\" position = { x = 0 y = 0 } }", "spriteType = { name = \"GFX_my_sprite\" texturefile = \"gfx/interface/my_mod/my_sprite.png\" }"],
       "relationships": ["Scripted GUI triggers/effects/properties reference GUI element names.", "Localisation provides text for textboxes."],
-      "validation": ["Check GFX_ names match.", "Check asset path exists.", "Avoid overlapping UI positions."],
+      "validation": ["Check GFX_ names match.", "Check asset path exists.", "Avoid overlapping UI positions.", "Generated comments should be in clear English and explain only non-obvious logic."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Interface_modding"]
     },
     {
@@ -621,7 +621,7 @@
       "body": "Scripted GUI binds GUI windows to script-driven visibility, click effects, dynamic properties, and dynamic lists. It is the core bridge for custom HOI4 interfaces and must be generated with exact element names.",
       "syntax_blocks": ["scripted_gui = { my_gui = { context_type = player_context window_name = \"my_window\" visible = { always = yes } dynamic_lists = { my_grid = { array = ROOT.my_array entry_container = my_entry change_scope = no value = my_value index = my_index } } } }"],
       "relationships": ["GUI element names must match triggers, effects, and properties.", "Arrays and temp variables drive dynamic lists and positions.", "GFX registers images used by properties."],
-      "validation": ["Check window_name exists in .gui.", "Use cheap visible triggers.", "Clear and rebuild temp arrays before dynamic list calculations."],
+      "validation": ["Check window_name exists in .gui.", "Use cheap visible triggers.", "Clear and rebuild temp arrays before dynamic list calculations.", "Generated comments should be in clear English and explain only non-obvious logic."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Scripted_GUI_modding", "https://hoi4.paradoxwikis.com/Data_structures"]
     },
     {
@@ -714,11 +714,35 @@
       "category": "debug",
       "file_types": ["txt", "gui", "gfx", "yml", "log"],
       "tags": ["error_log", "braces", "paths", "scope", "ROOT", "THIS", "PREV", "encoding"],
-      "body": "Common generated-file failures include missing braces, extra equals signs, wrong folders, missing localisation BOM, mismatched GFX names, invalid scope assumptions, duplicate IDs, missing assets, and hidden vanilla content caused by replace_path.",
-      "syntax_blocks": ["logs/error.log", "logs/setup.log", "logs/map.log"],
-      "relationships": ["Every generator should surface path, ID, encoding, and scope assumptions.", "Error logs should guide targeted fixes instead of blind regeneration."],
-      "validation": ["Run game with debug logs for release-critical content.", "Search error.log by generated prefix.", "Check localisation and GFX names when UI text or sprites are missing."],
+      "body": "Common generated-file failures include missing braces, extra equals signs, wrong folders, missing localisation BOM, mismatched GFX names, invalid scope assumptions, duplicate IDs, missing assets, and hidden vanilla content caused by replace_path. RHoiScribe can classify error.log into subsystems and connect messages to changed paths. For crash or load-failure debugging, summarize the error categories first, then inspect only likely changed files instead of blindly rewriting the mod.",
+      "syntax_blocks": ["logs/error.log", "logs/setup.log", "logs/map.log", "classify_error_log { error_log_path = \"<HOI4_DOCUMENT_PATH>/logs/error.log\" changed_paths = [\"common/national_focus/TAG.txt\"] }", "validate_hoi4_debug_run { game_path = \"<GAME_PATH>\" document_path = \"<HOI4_DOCUMENT_PATH>\" workspace_mod_path = \"<MOD_ROOT>\" launch = false }"],
+      "relationships": ["Every generator should surface path, ID, encoding, and scope assumptions.", "Error logs should guide targeted fixes instead of blind regeneration.", "Debug launch checks should run before starting hoi4.exe with -gdpr-compliant -debug_mode."],
+      "validation": ["Run game with debug logs for release-critical content.", "Search error.log by generated prefix.", "Check localisation and GFX names when UI text or sprites are missing.", "Classify error.log before proposing fixes after a crash.", "Use git diff or status only to analyze which generated files changed unless the user permits modifications.", "Before debug launch, confirm the document map, localisation, and history folders are empty so nudge output or stale files do not contaminate the run."],
       "source_refs": ["https://hoi4.paradoxwikis.com/Troubleshooting", "https://hoi4.paradoxwikis.com/Modding"]
+    },
+    {
+      "id": "workflow.agent_delivery_rules",
+      "title": "Agent delivery, language, and workspace safety rules",
+      "category": "workflow",
+      "file_types": ["txt", "gui", "gfx", "yml", "mod", "json"],
+      "tags": ["agent_rules", "ascii", "language", "comments", "complete_delivery", "conventional_commits", "workspace_safety"],
+      "body": "Agents should keep the conversation in the user initial language, while new code comments should be concise English comments. Generated deliverables should be complete, game-readable content rather than skeletons, placeholders, TODO blocks, or follow-up stubs. Workspace file names, folder names, token-like script IDs, OOB division names, variables, flags, idea IDs, focus IDs, event IDs, and similar machine-readable fields should be ASCII-only; localisation prose and visible player text may use the target language. Agents must not touch unrelated workspace content, leave temporary ps1 scripts or other helper files behind, reset git state, or commit without user permission.",
+      "syntax_blocks": ["focus = { id = TAG_01_FS_00 }", "# Calculate dynamic row offset for each visible entry.", "git commit -m \"feat: add automated release binaries\""],
+      "relationships": ["Unique identifier scanning enforces creation-time safety.", "Localisation topics define the player-facing language exception.", "Debug topics explain when git analysis is appropriate."],
+      "validation": ["Check generated paths and token fields for ASCII before writing.", "Remove temporary helper files after use.", "When committing is allowed, use Conventional Commits and include only files related to the current step.", "Do not claim completion until generated content is usable without a later fill-in pass."],
+      "source_refs": ["https://hoi4.paradoxwikis.com/Modding"]
+    },
+    {
+      "id": "workflow.environment_discovery_debug_launch",
+      "title": "Game path discovery and debug launch preflight",
+      "category": "workflow",
+      "file_types": ["json", "mod", "log", "exe"],
+      "tags": ["steam", "libraryfolders.vdf", "appmanifest_394360.acf", "launcher-settings.json", "gameDataPath", "debug_mode", "dlc_load.json", "playset"],
+      "body": "When local game context is needed, discover the HOI4 install through Steam first: read SteamPath or InstallPath, read steamapps/libraryfolders.vdf, find steamapps/appmanifest_394360.acf, parse installdir, then validate steamapps/common/<installdir>. If Steam metadata fails, scan candidate roots for a folder named Hearts of Iron IV and validate it by requiring hoi4.exe plus common, history, events, localisation, and map. launcher-settings.json in the game directory can provide gameDataPath for the HOI4 document folder and version for patch-aware decisions. Before launching hoi4.exe with -gdpr-compliant -debug_mode, validate that the document map, localisation, and history folders are empty; the document mod/*.mod descriptors exist; the workspace mod descriptor path points to the current workspace with / slashes; and dlc_load.json enables only the workspace mod plus dependencies.",
+      "syntax_blocks": ["discover_hoi4_environment { scan_fallback = true }", "validate_hoi4_debug_run { game_path = \"<GAME_PATH>\" document_path = \"<HOI4_DOCUMENT_PATH>\" workspace_mod_path = \"<MOD_ROOT>\" launch = false }", "hoi4.exe -gdpr-compliant -debug_mode"],
+      "relationships": ["Debug runs should be followed by classify_error_log when the game reports errors or crashes.", "Dependencies in descriptor.mod determine which extra .mod descriptors may be enabled.", "launcher-settings.json version can guide bundled knowledge and compatibility checks."],
+      "validation": ["Steam discovery must validate the final game path before returning it.", "Document path checks target the HOI4 user data folder, not the game install folder.", "Do not launch when any preflight check is red unless the user explicitly accepts the risk.", "Use / slashes in launcher .mod path fields pointing to the workspace mod."],
+      "source_refs": ["https://hoi4.paradoxwikis.com/Modding", "https://hoi4.paradoxwikis.com/Troubleshooting"]
     }
   ]
 }
