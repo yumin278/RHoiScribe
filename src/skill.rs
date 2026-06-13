@@ -208,4 +208,14 @@ mod tests {
         assert!(workflow.contains("rhoiscribe-skill-macos-universal.zip"));
         assert!(workflow.contains("resources/skill/SKILL.md"));
     }
+
+    #[test]
+    fn release_workflow_avoids_duplicate_body_title_and_cleans_old_releases() {
+        let workflow = include_str!("../.github/workflows/release-builds.yml");
+
+        assert!(!workflow.contains("echo \"## RHoiScribe $TAG_NAME\""));
+        assert!(workflow.contains("Clean duplicate release body headings"));
+        assert!(workflow.contains("gh release list"));
+        assert!(workflow.contains(r#"\A## RHoiScribe v[0-9]"#));
+    }
 }

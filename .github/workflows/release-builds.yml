@@ -178,8 +178,6 @@ jobs:
           fi
 
           {
-            echo "## RHoiScribe $TAG_NAME"
-            echo
             echo "RHoiScribe is a local MCP server for Hearts of Iron IV modding agents. Download the file for your platform, keep it in a stable folder, and use its path as the MCP server command."
             echo
             echo "### Downloads"
@@ -206,6 +204,29 @@ jobs:
             git log --no-merges --pretty=format:'- %s (%h)' "$CHANGE_RANGE"
             echo
           } > release-notes.md
+
+      - name: Clean duplicate release body headings
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          while IFS= read -r release_tag; do
+            body_file="$(mktemp)"
+            gh release view "$release_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json body \
+              --jq '.body' > "$body_file"
+
+            changed="$(python3 -c 'from pathlib import Path; import re; import sys; path = Path(sys.argv[1]); body = path.read_text(encoding="utf-8"); cleaned = re.sub(r"\A## RHoiScribe v[0-9][^\r\n]*(?:\r?\n){1,2}", "", body, count=1); path.write_text(cleaned, encoding="utf-8"); print("yes" if cleaned != body else "no")' "$body_file")"
+
+            if [ "$changed" = "yes" ]; then
+              gh release edit "$release_tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --notes-file "$body_file"
+            fi
+
+            rm -f "$body_file"
+          done < <(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName')
 
       - name: Publish release assets
         shell: bash
