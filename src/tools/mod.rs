@@ -1,6 +1,7 @@
 mod environment;
 mod error_log;
 mod project_index;
+mod project_validation;
 mod unique_scan;
 
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path};
@@ -19,6 +20,9 @@ pub use error_log::{
     ClassifyErrorLogRequest, ErrorLogCategory, ErrorLogClassificationResult, ErrorLogEntry,
 };
 pub use project_index::{IndexedFile, ProjectIndexItem, ProjectIndexRequest, ProjectIndexResult};
+pub use project_validation::{
+    ProjectValidationCheck, ProjectValidationRequest, ProjectValidationResult,
+};
 pub use unique_scan::{
     CandidateScanResult, IdentifierCandidate, IdentifierMatch, PathRisk, ScanRoot,
     UniqueIdentifierScanRequest, UniqueIdentifierScanResult,
@@ -85,6 +89,12 @@ const TOOL_SPECS: &[ToolSpec] = &[
         name: "index_hoi4_project",
         title: "Index HOI4 project",
         description: "Concurrently index HOI4 mod and game roots into structured definitions and references for flags, variables, scripted triggers/effects, GUI, GFX, and localisation.",
+        required: &["roots"],
+    },
+    ToolSpec {
+        name: "validate_hoi4_project",
+        title: "Validate HOI4 project",
+        description: "Run red/yellow/green static checks over indexed HOI4 roots for duplicate definitions, brace balance, missing GFX textures or sprites, localisation references, and replace_path risks.",
         required: &["roots"],
     },
     ToolSpec {
@@ -305,6 +315,12 @@ impl ToolCatalog {
                     ToolEngine::index_hoi4_project(request)?
                 )))
             }
+            "validate_hoi4_project" => {
+                let request = parse_arguments::<ProjectValidationRequest>(arguments)?;
+                Ok(CallToolResult::structured(json!(
+                    ToolEngine::validate_hoi4_project(request)?
+                )))
+            }
             "validate_hoi4_paths" => {
                 let request = parse_arguments::<ValidateHoi4PathsRequest>(arguments)?;
                 Ok(CallToolResult::structured(json!(
@@ -509,6 +525,12 @@ impl ToolEngine {
         request: ProjectIndexRequest,
     ) -> Result<ProjectIndexResult, ToolError> {
         project_index::index_hoi4_project(request).map_err(ToolError::InvalidRequest)
+    }
+
+    pub fn validate_hoi4_project(
+        request: ProjectValidationRequest,
+    ) -> Result<ProjectValidationResult, ToolError> {
+        project_validation::validate_hoi4_project(request).map_err(ToolError::InvalidRequest)
     }
 
     pub fn validate_hoi4_paths(request: ValidateHoi4PathsRequest) -> PathValidationResult {
