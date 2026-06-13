@@ -1,5 +1,6 @@
 mod environment;
 mod error_log;
+mod gui_gfx_asset;
 mod project_index;
 mod project_repair;
 mod project_validation;
@@ -20,6 +21,9 @@ pub use environment::{
 };
 pub use error_log::{
     ClassifyErrorLogRequest, ErrorLogCategory, ErrorLogClassificationResult, ErrorLogEntry,
+};
+pub use gui_gfx_asset::{
+    GenerateGuiGfxAssetRequest, GenerateGuiGfxAssetResult, GeneratedGuiGfxAssetFile,
 };
 pub use project_index::{IndexedFile, ProjectIndexItem, ProjectIndexRequest, ProjectIndexResult};
 pub use project_repair::{
@@ -114,6 +118,12 @@ const TOOL_SPECS: &[ToolSpec] = &[
         title: "Edit HOI4 script file",
         description: "Modify an existing HOI4 txt/gui/gfx/lua script file by replacing a named block or inserting a new named block, with dry-run preview, brace checks, formatting, and encoding preservation.",
         required: &["path", "operation", "dry_run"],
+    },
+    ToolSpec {
+        name: "generate_gui_gfx_asset",
+        title: "Generate GUI/GFX asset",
+        description: "Experimentally generate a local procedural HOI4 PNG asset plus .gfx and optional .gui registration without external image models; writing requires approved=true.",
+        required: &["asset_name", "width", "height", "approved", "dry_run"],
     },
     ToolSpec {
         name: "validate_hoi4_paths",
@@ -351,6 +361,12 @@ impl ToolCatalog {
                     ToolEngine::edit_hoi4_script_file(request)?
                 )))
             }
+            "generate_gui_gfx_asset" => {
+                let request = parse_arguments::<GenerateGuiGfxAssetRequest>(arguments)?;
+                Ok(CallToolResult::structured(json!(
+                    ToolEngine::generate_gui_gfx_asset(request)?
+                )))
+            }
             "validate_hoi4_paths" => {
                 let request = parse_arguments::<ValidateHoi4PathsRequest>(arguments)?;
                 Ok(CallToolResult::structured(json!(
@@ -573,6 +589,12 @@ impl ToolEngine {
         request: EditHoi4ScriptFileRequest,
     ) -> Result<EditHoi4ScriptFileResult, ToolError> {
         script_edit::edit_hoi4_script_file(request).map_err(ToolError::InvalidRequest)
+    }
+
+    pub fn generate_gui_gfx_asset(
+        request: GenerateGuiGfxAssetRequest,
+    ) -> Result<GenerateGuiGfxAssetResult, ToolError> {
+        gui_gfx_asset::generate_gui_gfx_asset(request).map_err(ToolError::InvalidRequest)
     }
 
     pub fn validate_hoi4_paths(request: ValidateHoi4PathsRequest) -> PathValidationResult {
