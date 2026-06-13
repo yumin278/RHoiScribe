@@ -687,13 +687,10 @@ fn base64_value(character: char) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::fs;
 
     use super::{GenerateGuiGfxAssetRequest, crc32, generate_gui_gfx_asset};
+    use crate::tools::test_support::unique_test_dir;
 
     #[test]
     fn refuses_generation_without_approval() {
@@ -877,7 +874,7 @@ mod tests {
 
     #[test]
     fn approved_apply_writes_game_files() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("gui-gfx-asset");
         let result = generate_gui_gfx_asset(GenerateGuiGfxAssetRequest {
             output_root: Some(root.to_string_lossy().to_string()),
             asset_name: "CHI_status_panel".to_string(),
@@ -910,26 +907,5 @@ mod tests {
         assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G']));
 
         fs::remove_dir_all(root).expect("temp output should clean up");
-    }
-
-    fn unique_temp_dir() -> std::path::PathBuf {
-        static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..100 {
-            let suffix = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time should be after unix epoch")
-                .as_nanos();
-            let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "rhoiscribe-gui-gfx-asset-test-{}-{}-{}",
-                std::process::id(),
-                suffix,
-                counter
-            ));
-            if fs::create_dir(&path).is_ok() {
-                return path;
-            }
-        }
-        panic!("failed to create unique temp directory");
     }
 }

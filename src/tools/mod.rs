@@ -7,6 +7,8 @@ mod project_index;
 mod project_repair;
 mod project_validation;
 mod script_edit;
+#[cfg(test)]
+mod test_support;
 mod unique_scan;
 
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path};

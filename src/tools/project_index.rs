@@ -707,18 +707,14 @@ fn is_ignored_idea_block(key: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::fs;
 
     use super::{ProjectIndexRequest, index_hoi4_project};
-    use crate::tools::ScanRoot;
+    use crate::tools::{ScanRoot, test_support::unique_test_dir};
 
     #[test]
     fn indexes_hoi4_definitions_and_references() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-index");
         write_file(
             &root,
             "common/scripted_triggers/CHI_triggers.txt",
@@ -808,26 +804,5 @@ mod tests {
             fs::create_dir_all(parent).expect("fixture parent should be created");
         }
         fs::write(path, content).expect("fixture file should be written");
-    }
-
-    fn unique_temp_dir() -> std::path::PathBuf {
-        static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..100 {
-            let suffix = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time should be after unix epoch")
-                .as_nanos();
-            let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "rhoiscribe-project-index-test-{}-{}-{}",
-                std::process::id(),
-                suffix,
-                counter
-            ));
-            if fs::create_dir(&path).is_ok() {
-                return path;
-            }
-        }
-        panic!("failed to create unique temp directory");
     }
 }

@@ -1,12 +1,8 @@
-use std::{
-    ffi::OsStr,
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{ffi::OsStr, fs, path::Path, process::Command};
 
 use serde::{Deserialize, Serialize};
 
+use super::project_files::{ProjectFile, collect_project_files};
 use super::{ScanRoot, format_paradox_script};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -59,12 +55,6 @@ pub struct RepairHoi4ProjectResult {
     pub changes: Vec<RepairChange>,
     pub ffmpeg: FfmpegStatus,
     pub messages: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ProjectFile {
-    absolute_path: PathBuf,
-    relative_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -635,60 +625,7 @@ fn line_has_comment(line: &str) -> bool {
 }
 
 fn collect_files(roots: &[ScanRoot]) -> Result<Vec<ProjectFile>, String> {
-    let mut files = Vec::new();
-
-    for root in roots {
-        let root_path = PathBuf::from(&root.path);
-        if !root_path.is_dir() {
-            return Err(format!("project root is not a directory: {}", root.path));
-        }
-
-        let mut pending = vec![root_path.clone()];
-        while let Some(path) = pending.pop() {
-            let entries = fs::read_dir(&path)
-                .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
-
-            for entry in entries {
-                let entry = entry.map_err(|error| error.to_string())?;
-                let entry_path = entry.path();
-                let file_type = entry.file_type().map_err(|error| error.to_string())?;
-
-                if file_type.is_dir() {
-                    if should_descend(&entry_path) {
-                        pending.push(entry_path);
-                    }
-                    continue;
-                }
-                if !file_type.is_file() {
-                    continue;
-                }
-                let relative_path = entry_path
-                    .strip_prefix(&root_path)
-                    .unwrap_or(&entry_path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                if should_scan_file(&relative_path) {
-                    files.push(ProjectFile {
-                        absolute_path: entry_path,
-                        relative_path,
-                    });
-                }
-            }
-        }
-    }
-
-    Ok(files)
-}
-
-fn should_descend(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-
-    !matches!(
-        name.to_ascii_lowercase().as_str(),
-        ".git" | "target" | "plans" | "tests" | "scripts" | ".idea" | ".vscode" | ".superpowers"
-    )
+    collect_project_files(roots, should_scan_file)
 }
 
 fn should_scan_file(relative_path: &str) -> bool {
@@ -804,21 +741,17 @@ fn status_rank(status: &str) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::fs;
 
     use super::{
         RepairHoi4ProjectRequest, detect_ffmpeg_with_installer, ffprobe_command,
         repair_hoi4_project,
     };
-    use crate::tools::ScanRoot;
+    use crate::tools::{ScanRoot, test_support::unique_test_dir};
 
     #[test]
     fn dry_run_reports_encoding_and_media_repairs_without_writing() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-repair");
         write_bytes(
             &root,
             "localisation/simp_chinese/CHI_l_simp_chinese.yml",
@@ -893,7 +826,7 @@ mod tests {
 
     #[test]
     fn apply_repairs_bom_rules_and_formats_scripts() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-repair");
         write_bytes(
             &root,
             "localisation/english/CHI_l_english.yml",
@@ -949,7 +882,7 @@ mod tests {
 
     #[test]
     fn format_repair_skips_comments_and_quoted_strings() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-repair");
         let original =
             "CHI_effect={ log=\"hello world\" # keep this comment\n add_political_power=1 }\n";
         write_bytes(
@@ -989,7 +922,7 @@ mod tests {
 
     #[test]
     fn ffmpeg_install_request_returns_script_when_missing_in_dry_run() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-repair");
         write_bytes(&root, "music/theme.ogg", b"not real audio");
 
         let result = repair_hoi4_project(RepairHoi4ProjectRequest {
@@ -1062,26 +995,5 @@ mod tests {
             fs::create_dir_all(parent).expect("fixture parent should be created");
         }
         fs::write(path, bytes).expect("fixture file should be written");
-    }
-
-    fn unique_temp_dir() -> std::path::PathBuf {
-        static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..100 {
-            let suffix = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time should be after unix epoch")
-                .as_nanos();
-            let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "rhoiscribe-project-repair-test-{}-{}-{}",
-                std::process::id(),
-                suffix,
-                counter
-            ));
-            if fs::create_dir(&path).is_ok() {
-                return path;
-            }
-        }
-        panic!("failed to create unique temp directory");
     }
 }

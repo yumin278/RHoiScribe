@@ -320,17 +320,14 @@ fn strip_bom(bytes: &[u8]) -> &[u8] {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::fs;
 
     use super::{EditHoi4ScriptFileRequest, ScriptEditOperation, edit_hoi4_script_file};
+    use crate::tools::test_support::unique_test_dir;
 
     #[test]
     fn dry_run_replaces_named_block_without_writing() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("script-edit");
         let path = root.join("common/decisions/CHI_decisions.txt");
         write_file(
             &path,
@@ -365,7 +362,7 @@ mod tests {
 
     #[test]
     fn apply_inserts_block_and_preserves_no_bom_script_encoding() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("script-edit");
         let path = root.join("common/scripted_effects/CHI_effects.txt");
         write_file(&path, "effects = {\n}\n");
 
@@ -395,7 +392,7 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_inserted_block_names() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("script-edit");
         let path = root.join("common/decisions/CHI_decisions.txt");
         write_file(
             &path,
@@ -423,8 +420,8 @@ mod tests {
 
     #[test]
     fn rejects_paths_outside_workspace_root() {
-        let workspace = unique_temp_dir();
-        let outside = unique_temp_dir();
+        let workspace = unique_test_dir("script-edit-workspace");
+        let outside = unique_test_dir("script-edit-outside");
         let path = outside.join("common/decisions/CHI_decisions.txt");
         write_file(&path, "CHI_category = {\n}\n");
 
@@ -449,7 +446,7 @@ mod tests {
 
     #[test]
     fn handles_multibyte_utf8_tokens_without_panicking() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("script-edit");
         let path = root.join("common/scripted_effects/CHI_effects.txt");
         write_file(
             &path,
@@ -478,26 +475,5 @@ mod tests {
             fs::create_dir_all(parent).expect("fixture parent should be created");
         }
         fs::write(path, content).expect("fixture file should be written");
-    }
-
-    fn unique_temp_dir() -> std::path::PathBuf {
-        static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..100 {
-            let suffix = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time should be after unix epoch")
-                .as_nanos();
-            let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "rhoiscribe-script-edit-test-{}-{}-{}",
-                std::process::id(),
-                suffix,
-                counter
-            ));
-            if fs::create_dir(&path).is_ok() {
-                return path;
-            }
-        }
-        panic!("failed to create unique temp directory");
     }
 }

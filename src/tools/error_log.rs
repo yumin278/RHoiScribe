@@ -153,11 +153,8 @@ fn likely_changed_paths(entries: &[ErrorLogEntry], changed_paths: &[String]) -> 
 #[cfg(test)]
 mod tests {
     use super::{ClassifyErrorLogRequest, classify_error_log};
-    use std::{
-        fs,
-        path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use crate::tools::test_support::unique_test_dir;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn classifies_error_log_and_links_changed_paths() {
@@ -193,10 +190,6 @@ mod tests {
     }
 
     fn unique_temp_file() -> PathBuf {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("rhoiscribe-error-log-{}.log", suffix))
+        unique_test_dir("error-log").join("error.log")
     }
 }

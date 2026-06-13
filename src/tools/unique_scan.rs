@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
     thread,
 };
@@ -9,6 +9,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::paradox_lexer::{Token, TokenKind, tokenize};
+use super::project_files::{ProjectFile, collect_project_files};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanRoot {
@@ -70,14 +71,6 @@ pub struct UniqueIdentifierScanResult {
     pub scanned_roots: usize,
     pub scanned_files: usize,
     pub messages: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct ScanFile {
-    root: String,
-    root_role: Option<String>,
-    absolute_path: PathBuf,
-    relative_path: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -170,64 +163,8 @@ fn candidate_lookup(candidates: &[IdentifierCandidate]) -> HashMap<String, HashS
     lookup
 }
 
-fn collect_scan_files(roots: &[ScanRoot]) -> Result<Vec<ScanFile>, String> {
-    let mut files = Vec::new();
-
-    for root in roots {
-        let root_path = PathBuf::from(&root.path);
-        if !root_path.exists() {
-            return Err(format!("scan root does not exist: {}", root.path));
-        }
-        if !root_path.is_dir() {
-            return Err(format!("scan root is not a directory: {}", root.path));
-        }
-
-        let mut pending = vec![root_path.clone()];
-        while let Some(path) = pending.pop() {
-            let entries = fs::read_dir(&path)
-                .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
-
-            for entry in entries {
-                let entry = entry.map_err(|error| error.to_string())?;
-                let entry_path = entry.path();
-                let file_type = entry.file_type().map_err(|error| error.to_string())?;
-
-                if file_type.is_dir() {
-                    if should_descend(&entry_path) {
-                        pending.push(entry_path);
-                    }
-                    continue;
-                }
-
-                if !file_type.is_file() {
-                    continue;
-                }
-
-                let relative_path = relative_path(&root_path, &entry_path);
-                if should_scan_file(&relative_path) {
-                    files.push(ScanFile {
-                        root: root.path.clone(),
-                        root_role: root.role.clone(),
-                        absolute_path: entry_path,
-                        relative_path,
-                    });
-                }
-            }
-        }
-    }
-
-    Ok(files)
-}
-
-fn should_descend(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-
-    !matches!(
-        name.to_ascii_lowercase().as_str(),
-        ".git" | "target" | "plans" | "tests" | "scripts" | ".idea" | ".vscode"
-    )
+fn collect_scan_files(roots: &[ScanRoot]) -> Result<Vec<ProjectFile>, String> {
+    collect_project_files(roots, should_scan_file)
 }
 
 fn should_scan_file(relative_path: &str) -> bool {
@@ -264,13 +201,6 @@ fn should_scan_file(relative_path: &str) -> bool {
     )
 }
 
-fn relative_path(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root)
-        .unwrap_or(file)
-        .to_string_lossy()
-        .replace('\\', "/")
-}
-
 fn worker_count(file_count: usize) -> usize {
     if file_count == 0 {
         return 1;
@@ -283,7 +213,7 @@ fn worker_count(file_count: usize) -> usize {
 }
 
 fn scan_files_parallel(
-    files: Vec<ScanFile>,
+    files: Vec<ProjectFile>,
     worker_count: usize,
     candidate_lookup: Arc<HashMap<String, HashSet<String>>>,
 ) -> Result<Vec<WorkerOutput>, String> {
@@ -313,7 +243,7 @@ fn scan_files_parallel(
 }
 
 fn scan_file_chunk(
-    files: &[ScanFile],
+    files: &[ProjectFile],
     candidate_lookup: &HashMap<String, HashSet<String>>,
 ) -> Result<WorkerOutput, String> {
     let mut output = WorkerOutput::default();
@@ -333,7 +263,7 @@ fn scan_file_chunk(
 }
 
 fn scan_file(
-    file: &ScanFile,
+    file: &ProjectFile,
     content: &str,
     candidate_lookup: &HashMap<String, HashSet<String>>,
 ) -> WorkerOutput {
@@ -409,7 +339,7 @@ fn is_assignment(tokens: &[Token], index: usize) -> bool {
 }
 
 fn scan_block_definition(
-    file: &ScanFile,
+    file: &ProjectFile,
     key: &str,
     line: usize,
     stack: &[String],
@@ -520,7 +450,7 @@ fn scan_block_definition(
 }
 
 fn scan_assignment(
-    file: &ScanFile,
+    file: &ProjectFile,
     key: &str,
     value: &str,
     line: usize,
@@ -682,7 +612,7 @@ fn scan_assignment(
 }
 
 fn scan_localisation_keys(
-    file: &ScanFile,
+    file: &ProjectFile,
     content: &str,
     candidate_lookup: &HashMap<String, HashSet<String>>,
     output: &mut WorkerOutput,
@@ -722,7 +652,7 @@ fn has_candidate(
 }
 
 fn push_match(
-    file: &ScanFile,
+    file: &ProjectFile,
     output: &mut WorkerOutput,
     entity_type: &str,
     value: &str,
@@ -751,7 +681,7 @@ struct FlagMatch<'a> {
 }
 
 fn push_flag_match(
-    file: &ScanFile,
+    file: &ProjectFile,
     output: &mut WorkerOutput,
     candidate_lookup: &HashMap<String, HashSet<String>>,
     flag_match: FlagMatch<'_>,

@@ -50,7 +50,7 @@ pub(crate) fn collect_project_files(
                     continue;
                 }
 
-                let relative_path = relative_path(&root_path, &entry_path);
+                let relative_path = relative_path(&root_path, &entry_path)?;
                 if !should_include(&relative_path) {
                     continue;
                 }
@@ -81,9 +81,30 @@ fn should_descend(path: &Path) -> bool {
     )
 }
 
-fn relative_path(root: &Path, file: &Path) -> String {
+fn relative_path(root: &Path, file: &Path) -> Result<String, String> {
     file.strip_prefix(root)
-        .unwrap_or(file)
-        .to_string_lossy()
-        .replace('\\', "/")
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .map_err(|error| {
+            format!(
+                "failed to normalize {} relative to {}: {}",
+                file.display(),
+                root.display(),
+                error
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::relative_path;
+
+    #[test]
+    fn relative_path_rejects_files_outside_root() {
+        let root = std::path::Path::new("project/root");
+        let outside = std::path::Path::new("other/root/common/test.txt");
+
+        let result = relative_path(root, outside);
+
+        assert!(result.is_err());
+    }
 }

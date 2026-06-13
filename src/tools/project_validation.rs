@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
     thread,
 };
@@ -9,8 +9,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::paradox_lexer::{TokenKind, tokenize};
-use super::project_files::{ProjectFile, collect_project_files};
-use super::{ProjectIndexItem, ProjectIndexRequest, ScanRoot, project_index};
+use super::project_files::ProjectFile;
+use super::{IndexedFile, ProjectIndexItem, ProjectIndexRequest, ScanRoot, project_index};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectValidationRequest {
@@ -44,25 +44,11 @@ pub fn validate_hoi4_project(
         return Err("at least one project root is required".to_string());
     }
 
-    let roots = if request.include_game_roots.unwrap_or(true) {
-        request.roots.clone()
-    } else {
-        request
-            .roots
-            .iter()
-            .filter(|root| root.role.as_deref() != Some("game"))
-            .cloned()
-            .collect::<Vec<_>>()
-    };
-
-    if roots.is_empty() {
-        return Err("no roots remain after filtering game roots".to_string());
-    }
-
     let index = project_index::index_hoi4_project(ProjectIndexRequest {
         roots: request.roots.clone(),
         include_game_roots: request.include_game_roots,
     })?;
+    let validation_files = validation_files_from_index(&index.files);
 
     let mut checks = Vec::new();
     checks.push(check(
@@ -81,11 +67,11 @@ pub fn validate_hoi4_project(
     ));
 
     check_duplicate_definitions(&index.definitions, &mut checks);
-    check_brace_balance(&roots, &mut checks)?;
-    check_replace_path_risks(&roots, &mut checks)?;
+    check_brace_balance(&validation_files, &mut checks)?;
+    check_replace_path_risks(&validation_files, &mut checks)?;
     check_missing_gfx_textures(&request.roots, &index.references, &mut checks);
     check_missing_gfx_sprites(&index.definitions, &index.references, &mut checks);
-    check_missing_localisation(&roots, &index.definitions, &mut checks)?;
+    check_missing_localisation(&validation_files, &index.definitions, &mut checks)?;
 
     checks.sort_by(|left, right| {
         (
@@ -119,6 +105,19 @@ pub fn validate_hoi4_project(
             "red blocks game-readability or likely load success; yellow needs review before release; green passed".to_string(),
         ],
     })
+}
+
+fn validation_files_from_index(files: &[IndexedFile]) -> Vec<ProjectFile> {
+    files
+        .iter()
+        .map(|file| ProjectFile {
+            root: file.root.clone(),
+            root_role: file.root_role.clone(),
+            absolute_path: PathBuf::from(&file.root).join(&file.path),
+            relative_path: file.path.clone(),
+            bytes: file.bytes,
+        })
+        .collect()
 }
 
 fn check_duplicate_definitions(
@@ -163,12 +162,13 @@ fn check_duplicate_definitions(
 }
 
 fn check_brace_balance(
-    roots: &[ScanRoot],
+    project_files: &[ProjectFile],
     checks: &mut Vec<ProjectValidationCheck>,
 ) -> Result<(), String> {
-    let files = collect_files(roots)?
-        .into_iter()
+    let files = project_files
+        .iter()
         .filter(|file| is_paradox_text_file(&file.relative_path))
+        .cloned()
         .collect::<Vec<_>>();
     checks.extend(parallel_file_checks(files, brace_balance_checks)?);
 
@@ -176,10 +176,10 @@ fn check_brace_balance(
 }
 
 fn check_replace_path_risks(
-    roots: &[ScanRoot],
+    project_files: &[ProjectFile],
     checks: &mut Vec<ProjectValidationCheck>,
 ) -> Result<(), String> {
-    for file in collect_files(roots)? {
+    for file in project_files {
         if !is_mod_descriptor(&file.relative_path) {
             continue;
         }
@@ -283,7 +283,7 @@ fn check_missing_gfx_sprites(
 }
 
 fn check_missing_localisation(
-    roots: &[ScanRoot],
+    project_files: &[ProjectFile],
     definitions: &[ProjectIndexItem],
     checks: &mut Vec<ProjectValidationCheck>,
 ) -> Result<(), String> {
@@ -294,9 +294,10 @@ fn check_missing_localisation(
         .collect::<HashSet<_>>();
     let defined_keys = Arc::new(defined_keys);
 
-    let files = collect_files(roots)?
-        .into_iter()
+    let files = project_files
+        .iter()
         .filter(|file| is_script_with_localisation_refs(&file.relative_path))
+        .cloned()
         .collect::<Vec<_>>();
     checks.extend(parallel_file_checks(files, move |file| {
         missing_localisation_checks(file, &defined_keys)
@@ -430,10 +431,6 @@ fn check(
     }
 }
 
-fn collect_files(roots: &[ScanRoot]) -> Result<Vec<ProjectFile>, String> {
-    collect_project_files(roots, should_validate_file)
-}
-
 fn parallel_file_checks<F>(
     files: Vec<ProjectFile>,
     checker: F,
@@ -485,47 +482,6 @@ fn worker_count(file_count: usize) -> usize {
         .unwrap_or(1)
         .min(file_count)
         .max(1)
-}
-
-fn should_validate_file(relative_path: &str) -> bool {
-    let normalized = relative_path.replace('\\', "/");
-    if is_mod_descriptor(&normalized) {
-        return true;
-    }
-
-    let Some(root) = normalized.split('/').next() else {
-        return false;
-    };
-    if !matches!(
-        root,
-        "common" | "events" | "history" | "interface" | "localisation" | "gfx" | "sound" | "music"
-    ) {
-        return false;
-    }
-
-    let Some(extension) = Path::new(&normalized)
-        .extension()
-        .and_then(|extension| extension.to_str())
-    else {
-        return false;
-    };
-
-    matches!(
-        extension.to_ascii_lowercase().as_str(),
-        "txt"
-            | "gui"
-            | "gfx"
-            | "yml"
-            | "yaml"
-            | "lua"
-            | "csv"
-            | "png"
-            | "dds"
-            | "tga"
-            | "wav"
-            | "ogg"
-            | "mod"
-    )
 }
 
 fn is_paradox_text_file(relative_path: &str) -> bool {
@@ -632,18 +588,14 @@ fn status_rank(status: &str) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::fs;
 
     use super::{ProjectValidationRequest, validate_hoi4_project};
-    use crate::tools::ScanRoot;
+    use crate::tools::{ScanRoot, test_support::unique_test_dir};
 
     #[test]
     fn validation_reports_red_yellow_and_green_checks() {
-        let root = unique_temp_dir();
+        let root = unique_test_dir("project-validation");
         write_file(
             &root,
             "common/national_focus/CHI_tree.txt",
@@ -726,8 +678,8 @@ mod tests {
 
     #[test]
     fn validation_avoids_gui_name_and_vanilla_texture_false_positives() {
-        let mod_root = unique_temp_dir();
-        let game_root = unique_temp_dir();
+        let mod_root = unique_test_dir("project-validation-mod");
+        let game_root = unique_test_dir("project-validation-game");
         write_file(
             &mod_root,
             "interface/CHI_interface.gfx",
@@ -779,26 +731,5 @@ mod tests {
             fs::create_dir_all(parent).expect("fixture parent should be created");
         }
         fs::write(path, content).expect("fixture file should be written");
-    }
-
-    fn unique_temp_dir() -> std::path::PathBuf {
-        static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
-        for _ in 0..100 {
-            let suffix = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time should be after unix epoch")
-                .as_nanos();
-            let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "rhoiscribe-project-validation-test-{}-{}-{}",
-                std::process::id(),
-                suffix,
-                counter
-            ));
-            if fs::create_dir(&path).is_ok() {
-                return path;
-            }
-        }
-        panic!("failed to create unique temp directory");
     }
 }

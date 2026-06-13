@@ -22,30 +22,8 @@ pub(crate) fn tokenize(content: &str) -> Vec<Token> {
     let mut lexer = Lexer::new(content);
 
     while let Some((index, character)) = lexer.next_char() {
-        match character {
-            '\n' => {}
-            '#' => lexer.consume_comment(),
-            '"' => tokens.push(lexer.consume_string(index)),
-            '=' => tokens.push(Token {
-                kind: TokenKind::Equals,
-                text: "=".to_string(),
-                line: lexer.line,
-                start: index,
-            }),
-            '{' => tokens.push(Token {
-                kind: TokenKind::Open,
-                text: "{".to_string(),
-                line: lexer.line,
-                start: index,
-            }),
-            '}' => tokens.push(Token {
-                kind: TokenKind::Close,
-                text: "}".to_string(),
-                line: lexer.line,
-                start: index,
-            }),
-            character if character.is_whitespace() => {}
-            character => tokens.push(lexer.consume_word(index, character)),
+        if let Some(token) = lexer.consume_token(index, character) {
+            tokens.push(token);
         }
     }
 
@@ -78,6 +56,31 @@ impl<'a> Lexer<'a> {
             if next == '\n' {
                 break;
             }
+        }
+    }
+
+    fn consume_token(&mut self, start: usize, character: char) -> Option<Token> {
+        match character {
+            '\n' => None,
+            '#' => {
+                self.consume_comment();
+                None
+            }
+            '"' => Some(self.consume_string(start)),
+            '=' => Some(self.symbol_token(TokenKind::Equals, "=", start)),
+            '{' => Some(self.symbol_token(TokenKind::Open, "{", start)),
+            '}' => Some(self.symbol_token(TokenKind::Close, "}", start)),
+            character if character.is_whitespace() => None,
+            character => Some(self.consume_word(start, character)),
+        }
+    }
+
+    fn symbol_token(&self, kind: TokenKind, text: &str, start: usize) -> Token {
+        Token {
+            kind,
+            text: text.to_string(),
+            line: self.line,
+            start,
         }
     }
 

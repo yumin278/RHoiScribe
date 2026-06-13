@@ -883,11 +883,8 @@ mod tests {
         DiscoverHoi4EnvironmentRequest, Hoi4DebugRunRequest, discover_hoi4_environment,
         parse_vdf_value, validate_hoi4_debug_run,
     };
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use crate::tools::test_support::unique_test_dir;
+    use std::{fs, path::Path};
 
     #[test]
     fn steam_manifest_discovers_game_path_and_launcher_settings() {
@@ -1040,11 +1037,7 @@ mod tests {
         }
     }
 
-    fn unique_temp_dir(prefix: &str) -> PathBuf {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("rhoiscribe-{}-{}", prefix, suffix))
+    fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+        unique_test_dir(prefix)
     }
 }
