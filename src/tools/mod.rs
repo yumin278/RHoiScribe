@@ -3,6 +3,7 @@ mod error_log;
 mod project_index;
 mod project_repair;
 mod project_validation;
+mod script_edit;
 mod unique_scan;
 
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path};
@@ -27,6 +28,7 @@ pub use project_repair::{
 pub use project_validation::{
     ProjectValidationCheck, ProjectValidationRequest, ProjectValidationResult,
 };
+pub use script_edit::{EditHoi4ScriptFileRequest, EditHoi4ScriptFileResult, ScriptEditOperation};
 pub use unique_scan::{
     CandidateScanResult, IdentifierCandidate, IdentifierMatch, PathRisk, ScanRoot,
     UniqueIdentifierScanRequest, UniqueIdentifierScanResult,
@@ -106,6 +108,12 @@ const TOOL_SPECS: &[ToolSpec] = &[
         title: "Repair HOI4 project",
         description: "Dry-run or apply fast HOI4 project repairs for UTF-8 BOM rules, Paradox script formatting, sound/music media checks, and ffmpeg approval-gated guidance.",
         required: &["roots", "dry_run"],
+    },
+    ToolSpec {
+        name: "edit_hoi4_script_file",
+        title: "Edit HOI4 script file",
+        description: "Modify an existing HOI4 txt/gui/gfx/lua script file by replacing a named block or inserting a new named block, with dry-run preview, brace checks, formatting, and encoding preservation.",
+        required: &["path", "operation", "dry_run"],
     },
     ToolSpec {
         name: "validate_hoi4_paths",
@@ -337,6 +345,12 @@ impl ToolCatalog {
                     ToolEngine::repair_hoi4_project(request)?
                 )))
             }
+            "edit_hoi4_script_file" => {
+                let request = parse_arguments::<EditHoi4ScriptFileRequest>(arguments)?;
+                Ok(CallToolResult::structured(json!(
+                    ToolEngine::edit_hoi4_script_file(request)?
+                )))
+            }
             "validate_hoi4_paths" => {
                 let request = parse_arguments::<ValidateHoi4PathsRequest>(arguments)?;
                 Ok(CallToolResult::structured(json!(
@@ -553,6 +567,12 @@ impl ToolEngine {
         request: RepairHoi4ProjectRequest,
     ) -> Result<RepairHoi4ProjectResult, ToolError> {
         project_repair::repair_hoi4_project(request).map_err(ToolError::InvalidRequest)
+    }
+
+    pub fn edit_hoi4_script_file(
+        request: EditHoi4ScriptFileRequest,
+    ) -> Result<EditHoi4ScriptFileResult, ToolError> {
+        script_edit::edit_hoi4_script_file(request).map_err(ToolError::InvalidRequest)
     }
 
     pub fn validate_hoi4_paths(request: ValidateHoi4PathsRequest) -> PathValidationResult {
