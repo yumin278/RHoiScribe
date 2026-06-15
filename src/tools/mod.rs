@@ -19,6 +19,9 @@
 // https://github.com/czxieddan/RHoiScribe
 //------------------------------------------------------------------------------------
 
+#[cfg(test)]
+#[path = "batch_generation_tests.rs"]
+mod batch_generation_tests;
 mod environment;
 mod error_log;
 mod gui_gfx_asset;
@@ -70,28 +73,28 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "generate_localisation_batch",
         title: "Generate localisation batch",
-        description: "Generate a HOI4 localisation yml file with UTF-8 BOM. file_stem may include nested subdirectories or a mod-relative localisation/<language>/ path; filenames are normalized to the usual _l_<language>.yml suffix.",
+        description: "Generate a HOI4 localisation yml file with UTF-8 BOM from entries shaped as key/value pairs. file_stem may include nested subdirectories or a mod-relative localisation/<language>/ path; filenames are normalized to the usual _l_<language>.yml suffix. When dry_run=false, provide output_root for the current mod or requested output root.",
         required: &["language", "file_stem", "entries", "dry_run"],
         handler: call_generate_localisation_batch,
     },
     ToolSpec {
         name: "generate_focus_batch",
         title: "Generate focus batch",
-        description: "Generate a minimal national focus file and matching localisation dry-run.",
+        description: "Generate a HOI4 focus tree from focus IDs plus optional per-focus blocks such as icon, x/y, prerequisites, availability, bypass, AI weights, war warnings, completion rewards, and extra raw HOI4 script blocks.",
         required: &["country_tag", "tree_id", "focuses", "dry_run"],
         handler: call_generate_focus_batch,
     },
     ToolSpec {
         name: "generate_event_batch",
         title: "Generate event batch",
-        description: "Generate a minimal HOI4 country event file and matching localisation dry-run.",
+        description: "Generate HOI4 country or news events from event IDs plus optional trigger, immediate, picture, major, option, AI chance, hidden effect, and extra raw HOI4 script blocks.",
         required: &["namespace", "events", "dry_run"],
         handler: call_generate_event_batch,
     },
     ToolSpec {
         name: "generate_decision_batch",
         title: "Generate decision batch",
-        description: "Generate a minimal decision category file and matching localisation dry-run.",
+        description: "Generate a HOI4 decision category from decision IDs plus optional icons, costs, visible/available gates, missions, timeout/cancel logic, effects, AI weights, and extra raw HOI4 script assignments or blocks.",
         required: &["category_id", "decisions", "dry_run"],
         handler: call_generate_decision_batch,
     },
@@ -154,7 +157,7 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "edit_hoi4_script_file",
         title: "Edit HOI4 script file",
-        description: "Modify an existing HOI4 txt/gui/gfx/lua script file inside workspace_root by replacing a named block or inserting a new named block, with dry-run preview, brace checks, formatting, and encoding preservation.",
+        description: "Modify an existing HOI4 txt/gui/gfx/lua script file inside workspace_root by replacing or inserting a named block, or update a localisation yml key/value entry, with dry-run preview, checks, and encoding preservation.",
         required: &["path", "operation", "dry_run"],
         handler: call_edit_hoi4_script_file,
     },
@@ -182,10 +185,102 @@ const TOOL_SPECS: &[ToolSpec] = &[
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct BatchEntry {
+pub struct LocalisationEntry {
+    #[serde(alias = "id")]
+    pub key: String,
+    #[serde(alias = "title")]
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct FocusEntry {
     pub id: String,
-    pub title: String,
-    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub cost: Option<i32>,
+    #[serde(default)]
+    pub prerequisite: Vec<String>,
+    #[serde(default)]
+    pub mutually_exclusive: Vec<String>,
+    pub available: Option<String>,
+    pub bypass: Option<String>,
+    pub cancel_if_invalid: Option<bool>,
+    pub continue_if_invalid: Option<bool>,
+    pub available_if_capitulated: Option<bool>,
+    pub will_lead_to_war_with: Option<String>,
+    pub select_effect: Option<String>,
+    pub complete_tooltip: Option<String>,
+    pub completion_reward: Option<String>,
+    pub ai_will_do: Option<String>,
+    #[serde(default)]
+    pub extra_assignments: Vec<ScriptAssignment>,
+    #[serde(default)]
+    pub extra_blocks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct EventEntry {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub event_type: Option<String>,
+    pub title: Option<String>,
+    pub desc: Option<String>,
+    pub picture: Option<String>,
+    pub major: Option<bool>,
+    pub is_triggered_only: Option<bool>,
+    pub fire_only_once: Option<bool>,
+    pub trigger: Option<String>,
+    pub mean_time_to_happen: Option<String>,
+    pub immediate: Option<String>,
+    #[serde(default)]
+    pub options: Vec<EventOptionEntry>,
+    #[serde(default)]
+    pub extra_assignments: Vec<ScriptAssignment>,
+    #[serde(default)]
+    pub extra_blocks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DecisionEntry {
+    pub id: String,
+    pub icon: Option<String>,
+    pub cost: Option<i32>,
+    pub fire_only_once: Option<bool>,
+    pub days_remove: Option<i32>,
+    pub days_mission_timeout: Option<i32>,
+    pub visible: Option<String>,
+    pub available: Option<String>,
+    pub target_trigger: Option<String>,
+    pub cancel_trigger: Option<String>,
+    pub remove_trigger: Option<String>,
+    pub complete_effect: Option<String>,
+    pub timeout_effect: Option<String>,
+    pub remove_effect: Option<String>,
+    pub ai_will_do: Option<String>,
+    #[serde(default)]
+    pub extra_assignments: Vec<ScriptAssignment>,
+    #[serde(default)]
+    pub extra_blocks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct EventOptionEntry {
+    pub name: String,
+    pub trigger: Option<String>,
+    pub ai_chance: Option<String>,
+    pub effects: Option<String>,
+    pub hidden_effect: Option<String>,
+    #[serde(default)]
+    pub extra_assignments: Vec<ScriptAssignment>,
+    #[serde(default)]
+    pub extra_blocks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ScriptAssignment {
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -193,7 +288,7 @@ pub struct LocalisationBatchRequest {
     pub language: String,
     pub file_stem: String,
     pub key_prefix: Option<String>,
-    pub entries: Vec<BatchEntry>,
+    pub entries: Vec<LocalisationEntry>,
     pub dry_run: bool,
     pub output_root: Option<String>,
 }
@@ -202,7 +297,7 @@ pub struct LocalisationBatchRequest {
 pub struct FocusBatchRequest {
     pub country_tag: String,
     pub tree_id: String,
-    pub focuses: Vec<BatchEntry>,
+    pub focuses: Vec<FocusEntry>,
     pub dry_run: bool,
     pub output_root: Option<String>,
 }
@@ -210,7 +305,7 @@ pub struct FocusBatchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EventBatchRequest {
     pub namespace: String,
-    pub events: Vec<BatchEntry>,
+    pub events: Vec<EventEntry>,
     pub dry_run: bool,
     pub output_root: Option<String>,
 }
@@ -218,7 +313,10 @@ pub struct EventBatchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DecisionBatchRequest {
     pub category_id: String,
-    pub decisions: Vec<BatchEntry>,
+    pub icon: Option<String>,
+    pub visible: Option<String>,
+    pub allowed: Option<String>,
+    pub decisions: Vec<DecisionEntry>,
     pub dry_run: bool,
     pub output_root: Option<String>,
 }
@@ -356,16 +454,14 @@ impl ToolEngine {
     pub fn generate_localisation_batch(
         request: LocalisationBatchRequest,
     ) -> Result<ToolExecutionResult, ToolError> {
-        let language_dir = language_directory(&request.language);
-        let path = localisation_path(&language_dir, &request.file_stem, &request.language);
-        let mut content = format!("{}:\n", request.language);
+        let language = localisation_language_key(&request.language);
+        let language_dir = language_directory(&language);
+        let path = localisation_path(&language_dir, &request.file_stem, &language);
+        let mut content = format!("{}:\n", language);
 
         for entry in &request.entries {
-            let key = localised_key(&request.key_prefix, &entry.id);
-            content.push_str(&format!(" {}:0 \"{}\"\n", key, entry.title));
-            if let Some(description) = &entry.description {
-                content.push_str(&format!(" {}_desc:0 \"{}\"\n", key, description));
-            }
+            let key = localised_key(&request.key_prefix, &entry.key);
+            content.push_str(&format!(" {}:0 \"{}\"\n", key, entry.value));
         }
 
         finish_generation(
@@ -389,12 +485,7 @@ impl ToolEngine {
         );
 
         for (index, focus) in request.focuses.iter().enumerate() {
-            content.push_str(&format!(
-                "\tfocus = {{\n\t\tid = {}\n\t\ticon = GFX_focus_{}\n\t\tx = {}\n\t\ty = 0\n\t\tcost = 10\n\t\tcompletion_reward = {{ add_political_power = 50 }}\n\t}}\n",
-                focus.id,
-                focus.id,
-                index * 2
-            ));
+            content.push_str(&render_focus_entry(focus, index));
         }
 
         content.push_str("}\n");
@@ -416,18 +507,8 @@ impl ToolEngine {
     ) -> Result<ToolExecutionResult, ToolError> {
         let mut content = format!("namespace = {}\n\n", request.namespace);
 
-        for (index, _event) in request.events.iter().enumerate() {
-            content.push_str(&format!(
-                "country_event = {{\n\tid = {}.{}\n\ttitle = {}.{}.t\n\tdesc = {}.{}.d\n\tis_triggered_only = yes\n\toption = {{\n\t\tname = {}.{}.a\n\t}}\n}}\n\n",
-                request.namespace,
-                index + 1,
-                request.namespace,
-                index + 1,
-                request.namespace,
-                index + 1,
-                request.namespace,
-                index + 1
-            ));
+        for (index, event) in request.events.iter().enumerate() {
+            content.push_str(&render_event_entry(&request.namespace, event, index));
         }
 
         finish_generation(
@@ -445,16 +526,19 @@ impl ToolEngine {
     pub fn generate_decision_batch(
         request: DecisionBatchRequest,
     ) -> Result<ToolExecutionResult, ToolError> {
-        let mut content = format!(
-            "{} = {{\n\ticon = generic_decisions\n\n",
-            request.category_id
+        let mut content = format!("{} = {{\n", request.category_id);
+        push_assignment(
+            &mut content,
+            1,
+            "icon",
+            request.icon.as_deref().unwrap_or("generic_decisions"),
         );
+        push_optional_block(&mut content, 1, "visible", request.visible.as_deref());
+        push_optional_block(&mut content, 1, "allowed", request.allowed.as_deref());
+        content.push('\n');
 
         for decision in &request.decisions {
-            content.push_str(&format!(
-                "\t{} = {{\n\t\ticon = generic_decision\n\t\tcost = 25\n\t\tavailable = {{ always = yes }}\n\t\tcomplete_effect = {{ add_political_power = -25 }}\n\t}}\n",
-                decision.id
-            ));
+            content.push_str(&render_decision_entry(decision));
         }
 
         content.push_str("}\n");
@@ -808,6 +892,14 @@ fn language_directory(language: &str) -> String {
     language.strip_prefix("l_").unwrap_or(language).to_string()
 }
 
+fn localisation_language_key(language: &str) -> String {
+    if language.starts_with("l_") {
+        language.to_string()
+    } else {
+        format!("l_{}", language)
+    }
+}
+
 fn localisation_path(language_dir: &str, file_stem: &str, language: &str) -> String {
     let normalized_stem = file_stem
         .replace('\\', "/")
@@ -837,6 +929,315 @@ fn localised_key(prefix: &Option<String>, id: &str) -> String {
         Some(prefix) if !prefix.is_empty() => format!("{}_{}", prefix, id),
         _ => id.to_string(),
     }
+}
+
+fn render_focus_entry(focus: &FocusEntry, index: usize) -> String {
+    let mut content = "\tfocus = {\n".to_string();
+    push_assignment(&mut content, 2, "id", &focus.id);
+    push_assignment(
+        &mut content,
+        2,
+        "icon",
+        focus
+            .icon
+            .as_deref()
+            .unwrap_or(&format!("GFX_focus_{}", focus.id)),
+    );
+    push_assignment(
+        &mut content,
+        2,
+        "x",
+        &focus.x.unwrap_or((index * 2) as i32).to_string(),
+    );
+    push_assignment(&mut content, 2, "y", &focus.y.unwrap_or(0).to_string());
+    push_assignment(
+        &mut content,
+        2,
+        "cost",
+        &focus.cost.unwrap_or(10).to_string(),
+    );
+    push_focus_links(&mut content, "prerequisite", &focus.prerequisite);
+    push_focus_links(
+        &mut content,
+        "mutually_exclusive",
+        &focus.mutually_exclusive,
+    );
+    push_optional_bool(
+        &mut content,
+        2,
+        "cancel_if_invalid",
+        focus.cancel_if_invalid,
+    );
+    push_optional_bool(
+        &mut content,
+        2,
+        "continue_if_invalid",
+        focus.continue_if_invalid,
+    );
+    push_optional_bool(
+        &mut content,
+        2,
+        "available_if_capitulated",
+        focus.available_if_capitulated,
+    );
+    push_optional_assignment(
+        &mut content,
+        2,
+        "will_lead_to_war_with",
+        focus.will_lead_to_war_with.as_deref(),
+    );
+    push_optional_block(&mut content, 2, "available", focus.available.as_deref());
+    push_optional_block(&mut content, 2, "bypass", focus.bypass.as_deref());
+    push_optional_block(
+        &mut content,
+        2,
+        "select_effect",
+        focus.select_effect.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "complete_tooltip",
+        focus.complete_tooltip.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "completion_reward",
+        focus
+            .completion_reward
+            .as_deref()
+            .or(Some("add_political_power = 50")),
+    );
+    push_optional_block(&mut content, 2, "ai_will_do", focus.ai_will_do.as_deref());
+    push_script_assignments(&mut content, 2, &focus.extra_assignments);
+    push_extra_blocks(&mut content, 2, &focus.extra_blocks);
+    content.push_str("\t}\n");
+    content
+}
+
+fn render_event_entry(namespace: &str, event: &EventEntry, index: usize) -> String {
+    let id = event
+        .id
+        .clone()
+        .unwrap_or_else(|| format!("{}.{}", namespace, index + 1));
+    let event_type = event.event_type.as_deref().unwrap_or("country_event");
+    let mut content = format!("{} = {{\n", event_type);
+    push_assignment(&mut content, 1, "id", &id);
+    push_assignment(
+        &mut content,
+        1,
+        "title",
+        event.title.as_deref().unwrap_or(&format!("{}.t", id)),
+    );
+    push_assignment(
+        &mut content,
+        1,
+        "desc",
+        event.desc.as_deref().unwrap_or(&format!("{}.d", id)),
+    );
+    push_optional_assignment(&mut content, 1, "picture", event.picture.as_deref());
+    push_optional_bool(&mut content, 1, "major", event.major);
+    push_optional_bool(
+        &mut content,
+        1,
+        "is_triggered_only",
+        event.is_triggered_only.or(Some(true)),
+    );
+    push_optional_bool(&mut content, 1, "fire_only_once", event.fire_only_once);
+    push_optional_block(&mut content, 1, "trigger", event.trigger.as_deref());
+    push_optional_block(
+        &mut content,
+        1,
+        "mean_time_to_happen",
+        event.mean_time_to_happen.as_deref(),
+    );
+    push_optional_block(&mut content, 1, "immediate", event.immediate.as_deref());
+    if event.options.is_empty() {
+        content.push_str(&format!("\toption = {{\n\t\tname = {}.a\n\t}}\n", id));
+    } else {
+        for option in &event.options {
+            content.push_str(&render_event_option(option));
+        }
+    }
+    push_script_assignments(&mut content, 1, &event.extra_assignments);
+    push_extra_blocks(&mut content, 1, &event.extra_blocks);
+    content.push_str("}\n\n");
+    content
+}
+
+fn render_event_option(option: &EventOptionEntry) -> String {
+    let mut content = "\toption = {\n".to_string();
+    push_assignment(&mut content, 2, "name", &option.name);
+    push_optional_block(&mut content, 2, "trigger", option.trigger.as_deref());
+    push_optional_block(&mut content, 2, "ai_chance", option.ai_chance.as_deref());
+    push_raw_block_body(&mut content, 2, option.effects.as_deref());
+    push_optional_block(
+        &mut content,
+        2,
+        "hidden_effect",
+        option.hidden_effect.as_deref(),
+    );
+    push_script_assignments(&mut content, 2, &option.extra_assignments);
+    push_extra_blocks(&mut content, 2, &option.extra_blocks);
+    content.push_str("\t}\n");
+    content
+}
+
+fn render_decision_entry(decision: &DecisionEntry) -> String {
+    let mut content = format!("\t{} = {{\n", decision.id);
+    push_assignment(
+        &mut content,
+        2,
+        "icon",
+        decision.icon.as_deref().unwrap_or("generic_decision"),
+    );
+    push_assignment(
+        &mut content,
+        2,
+        "cost",
+        &decision.cost.unwrap_or(25).to_string(),
+    );
+    push_optional_bool(&mut content, 2, "fire_only_once", decision.fire_only_once);
+    push_optional_assignment(
+        &mut content,
+        2,
+        "days_remove",
+        decision
+            .days_remove
+            .map(|value| value.to_string())
+            .as_deref(),
+    );
+    push_optional_assignment(
+        &mut content,
+        2,
+        "days_mission_timeout",
+        decision
+            .days_mission_timeout
+            .map(|value| value.to_string())
+            .as_deref(),
+    );
+    push_optional_block(&mut content, 2, "visible", decision.visible.as_deref());
+    push_optional_block(&mut content, 2, "available", decision.available.as_deref());
+    push_optional_block(
+        &mut content,
+        2,
+        "target_trigger",
+        decision.target_trigger.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "cancel_trigger",
+        decision.cancel_trigger.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "remove_trigger",
+        decision.remove_trigger.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "complete_effect",
+        decision
+            .complete_effect
+            .as_deref()
+            .or(Some("add_political_power = -25")),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "timeout_effect",
+        decision.timeout_effect.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "remove_effect",
+        decision.remove_effect.as_deref(),
+    );
+    push_optional_block(
+        &mut content,
+        2,
+        "ai_will_do",
+        decision.ai_will_do.as_deref(),
+    );
+    push_script_assignments(&mut content, 2, &decision.extra_assignments);
+    push_extra_blocks(&mut content, 2, &decision.extra_blocks);
+    content.push_str("\t}\n");
+    content
+}
+
+fn push_focus_links(content: &mut String, key: &str, focus_ids: &[String]) {
+    for focus_id in focus_ids {
+        push_named_block(content, 2, key, &[format!("focus = {}", focus_id)]);
+    }
+}
+
+fn push_script_assignments(content: &mut String, indent: usize, assignments: &[ScriptAssignment]) {
+    for assignment in assignments {
+        push_assignment(content, indent, &assignment.key, &assignment.value);
+    }
+}
+
+fn push_extra_blocks(content: &mut String, indent: usize, blocks: &[String]) {
+    for block in blocks {
+        push_raw_block_body(content, indent, Some(block));
+    }
+}
+
+fn push_optional_bool(content: &mut String, indent: usize, key: &str, value: Option<bool>) {
+    if let Some(value) = value {
+        push_assignment(content, indent, key, if value { "yes" } else { "no" });
+    }
+}
+
+fn push_optional_assignment(content: &mut String, indent: usize, key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        push_assignment(content, indent, key, value);
+    }
+}
+
+fn push_assignment(content: &mut String, indent: usize, key: &str, value: &str) {
+    content.push_str(&format!("{}{} = {}\n", "\t".repeat(indent), key, value));
+}
+
+fn push_optional_block(content: &mut String, indent: usize, key: &str, body: Option<&str>) {
+    if let Some(body) = body {
+        push_named_block(content, indent, key, &body_lines(body));
+    }
+}
+
+fn push_named_block(content: &mut String, indent: usize, key: &str, lines: &[String]) {
+    content.push_str(&format!("{}{} = {{\n", "\t".repeat(indent), key));
+    push_indented_lines(content, indent + 1, lines);
+    content.push_str(&format!("{}}}\n", "\t".repeat(indent)));
+}
+
+fn push_raw_block_body(content: &mut String, indent: usize, body: Option<&str>) {
+    if let Some(body) = body {
+        push_indented_lines(content, indent, &body_lines(body));
+    }
+}
+
+fn push_indented_lines(content: &mut String, indent: usize, lines: &[String]) {
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+        content.push_str(&format!("{}{}\n", "\t".repeat(indent), line.trim()));
+    }
+}
+
+fn body_lines(body: &str) -> Vec<String> {
+    let formatted = format_paradox_script(body);
+    formatted
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.to_string())
+        .collect()
 }
 
 fn format_paradox_script(script: &str) -> String {

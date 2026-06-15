@@ -320,6 +320,18 @@ mod tests {
     }
 
     #[test]
+    fn project_quality_topic_documents_encoding_repair() {
+        let catalog = KnowledgeCatalog::load_embedded().expect("catalog should load");
+        let topic = catalog
+            .topic("workflow.project_quality_tools")
+            .expect("project quality topic should exist");
+
+        assert!(topic.body.contains("repair_hoi4_project"));
+        assert!(topic.body.contains("UTF-8 BOM"));
+        assert!(topic.body.contains("legacy text encodings"));
+    }
+
+    #[test]
     fn visitor_docs_link_to_skill_setup() {
         let readmes = [
             include_str!("../../README.md"),

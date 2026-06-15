@@ -21,6 +21,8 @@
 
 use std::fs;
 
+use encoding_rs::GBK;
+
 use super::{
     RepairCheck, RepairHoi4ProjectRequest, RepairHoi4ProjectResult, detect_ffmpeg_with_installer,
     ffprobe_command, repair_hoi4_project,
@@ -126,6 +128,42 @@ fn apply_repairs_bom_rules_and_formats_scripts() {
         .expect("script should read");
     assert!(!script.starts_with(&[0xEF, 0xBB, 0xBF]));
     assert!(String::from_utf8_lossy(&script).contains("sample_effect = {"));
+
+    fs::remove_dir_all(root).expect("temp output should clean up");
+}
+
+#[test]
+fn apply_repairs_legacy_encoded_localisation_to_utf8_bom() {
+    let root = unique_test_dir("project-repair");
+    let (gbk_bytes, _, _) = GBK.encode("l_simp_chinese:\n sample_key:0 \"测试文本\"\n");
+    write_bytes(
+        &root,
+        "localisation/simp_chinese/legacy_l_simp_chinese.yml",
+        gbk_bytes.as_ref(),
+    );
+
+    let result = repair_hoi4_project(RepairHoi4ProjectRequest {
+        roots: vec![ScanRoot {
+            path: root.to_string_lossy().to_string(),
+            role: Some("mod".to_string()),
+        }],
+        dry_run: false,
+        apply: Some(true),
+        install_ffmpeg: Some(false),
+        format_scripts: Some(false),
+        check_media: Some(false),
+        ffmpeg_path: None,
+    })
+    .expect("repair apply should convert legacy localisation");
+
+    assert!(result.applied);
+    assert_repair_check(&result.checks, "text_encoding", "yellow");
+    assert_change_applied(&result, "convert_to_utf8");
+    let repaired = fs::read(root.join("localisation/simp_chinese/legacy_l_simp_chinese.yml"))
+        .expect("localisation should read");
+    assert!(repaired.starts_with(&[0xEF, 0xBB, 0xBF]));
+    let text = String::from_utf8(repaired[3..].to_vec()).expect("output should be utf-8");
+    assert!(text.contains("测试文本"));
 
     fs::remove_dir_all(root).expect("temp output should clean up");
 }
@@ -261,5 +299,14 @@ fn assert_change_planned(result: &RepairHoi4ProjectResult, action: &str) {
             .changes
             .iter()
             .any(|change| change.action == action && !change.applied)
+    );
+}
+
+fn assert_change_applied(result: &RepairHoi4ProjectResult, action: &str) {
+    assert!(
+        result
+            .changes
+            .iter()
+            .any(|change| change.action == action && change.applied)
     );
 }

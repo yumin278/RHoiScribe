@@ -218,6 +218,9 @@ mod tests {
         assert!(skill.contains("--skill list-prompts"));
         assert!(skill.contains("--skill call-tool"));
         assert!(skill.contains("same directory"));
+        assert!(skill.contains("run `validate_hoi4_project` before finishing"));
+        assert!(skill.contains("run `repair_hoi4_project` with `dry_run=true`"));
+        assert!(skill.contains("UTF-8 BOM for `localisation/**`"));
     }
 
     #[test]

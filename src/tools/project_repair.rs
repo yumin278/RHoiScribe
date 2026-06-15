@@ -21,6 +21,7 @@
 
 use std::{fs, path::Path};
 
+use encoding_rs::{Encoding, GBK, WINDOWS_1252};
 use serde::{Deserialize, Serialize};
 
 use self::project_repair_media::{check_media_file, detect_ffmpeg};
@@ -251,6 +252,9 @@ fn ensure_bom(
 ) -> Result<(), String> {
     let bytes = fs::read(&file.absolute_path)
         .map_err(|error| format!("failed to read {}: {}", file.absolute_path.display(), error))?;
+    if !is_utf8_text(&bytes) {
+        return convert_text_to_utf8(file, &bytes, Utf8Output::WithBom, apply, checks, changes);
+    }
     if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
         return Ok(());
     }
@@ -293,6 +297,9 @@ fn ensure_no_bom(
 ) -> Result<(), String> {
     let bytes = fs::read(&file.absolute_path)
         .map_err(|error| format!("failed to read {}: {}", file.absolute_path.display(), error))?;
+    if !is_utf8_text(&bytes) {
+        return convert_text_to_utf8(file, &bytes, Utf8Output::WithoutBom, apply, checks, changes);
+    }
     if !bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
         return Ok(());
     }
@@ -323,6 +330,107 @@ fn ensure_no_bom(
         "Remove UTF-8 BOM.",
     ));
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Utf8Output {
+    WithBom,
+    WithoutBom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DecodedLegacyText {
+    text: String,
+    encoding: &'static str,
+    had_errors: bool,
+    replacements: usize,
+}
+
+fn is_utf8_text(bytes: &[u8]) -> bool {
+    std::str::from_utf8(strip_bom(bytes)).is_ok()
+}
+
+fn convert_text_to_utf8(
+    file: &ProjectFile,
+    bytes: &[u8],
+    output: Utf8Output,
+    apply: bool,
+    checks: &mut Vec<RepairCheck>,
+    changes: &mut Vec<RepairChange>,
+) -> Result<(), String> {
+    let decoded = decode_legacy_text(strip_bom(bytes));
+    let target = match output {
+        Utf8Output::WithBom => "UTF-8 with BOM",
+        Utf8Output::WithoutBom => "UTF-8 without BOM",
+    };
+
+    checks.push(check(
+        "text_encoding",
+        "yellow",
+        "warning",
+        &file.relative_path,
+        &format!(
+            "File is not valid UTF-8; RHoiScribe can decode it as {} and rewrite it as {}.",
+            decoded.encoding, target
+        ),
+        Some(format!(
+            "Run repair_hoi4_project apply mode to convert this text file to {}.",
+            target
+        )),
+    ));
+
+    if apply {
+        fs::write(&file.absolute_path, encode_utf8_text(&decoded.text, output)).map_err(
+            |error| {
+                format!(
+                    "failed to write {}: {}",
+                    file.absolute_path.display(),
+                    error
+                )
+            },
+        )?;
+    }
+
+    changes.push(change(
+        &file.relative_path,
+        "convert_to_utf8",
+        apply,
+        &format!("Convert {} text to {}.", decoded.encoding, target),
+    ));
+    Ok(())
+}
+
+fn decode_legacy_text(bytes: &[u8]) -> DecodedLegacyText {
+    [("gbk", GBK), ("windows-1252", WINDOWS_1252)]
+        .into_iter()
+        .map(|(name, encoding)| decode_with_encoding(bytes, name, encoding))
+        .min_by_key(|decoded| (decoded.had_errors, decoded.replacements))
+        .expect("legacy text candidates should not be empty")
+}
+
+fn decode_with_encoding(
+    bytes: &[u8],
+    name: &'static str,
+    encoding: &'static Encoding,
+) -> DecodedLegacyText {
+    let (text, _, had_errors) = encoding.decode(bytes);
+    let text = text.into_owned();
+    let replacements = text.matches('\u{fffd}').count();
+    DecodedLegacyText {
+        text,
+        encoding: name,
+        had_errors,
+        replacements,
+    }
+}
+
+fn encode_utf8_text(text: &str, output: Utf8Output) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    if output == Utf8Output::WithBom {
+        bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+    }
+    bytes.extend_from_slice(text.as_bytes());
+    bytes
 }
 
 fn format_script_file(

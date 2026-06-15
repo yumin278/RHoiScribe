@@ -84,6 +84,7 @@ pub fn validate_hoi4_project(
     check_missing_gfx_textures(&request.roots, &index.references, &mut checks);
     check_missing_gfx_sprites(&index.definitions, &index.references, &mut checks);
     check_missing_localisation(&validation_files, &index.definitions, &mut checks)?;
+    add_green_category_checks(&mut checks);
     sort_checks(&mut checks);
 
     let status = overall_status(&checks).to_string();
@@ -122,6 +123,42 @@ fn index_summary(index: &project_index::ProjectIndexResult) -> String {
         index.definitions.len(),
         index.references.len()
     )
+}
+
+const CATEGORY_GREEN_CHECKS: &[(&str, &str)] = &[
+    (
+        "duplicate_definition",
+        "No duplicate structured definitions were found.",
+    ),
+    ("brace_balance", "All scanned script braces are balanced."),
+    (
+        "replace_path",
+        "No descriptor replace_path entries were found in scanned roots.",
+    ),
+    (
+        "missing_gfx_texture",
+        "All indexed GFX texture references resolve in scanned roots.",
+    ),
+    (
+        "missing_gfx_sprite",
+        "All indexed GUI sprite references resolve to sprite definitions.",
+    ),
+    (
+        "missing_localisation",
+        "All indexed localisation references resolve to localisation keys.",
+    ),
+];
+
+fn add_green_category_checks(checks: &mut Vec<ProjectValidationCheck>) {
+    for (id, message) in CATEGORY_GREEN_CHECKS {
+        if checks
+            .iter()
+            .any(|check| check.id == *id && check.status != "green")
+        {
+            continue;
+        }
+        checks.push(check(id, "green", "info", "", 0, message, None));
+    }
 }
 
 fn sort_checks(checks: &mut [ProjectValidationCheck]) {

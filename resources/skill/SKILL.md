@@ -40,8 +40,11 @@ Use the platform executable name for the current system. On Windows, quote JSON 
 
 - Read RHoiScribe resources before searching the web.
 - Use `scan_unique_identifiers` before creating new IDs, flags, variables, tags, ideas, focuses, decisions, characters, scripted triggers, or scripted effects.
-- Use `index_hoi4_project` and `validate_hoi4_project` before broad edits so references, missing assets, localisation keys, and duplicate definitions are checked across the project.
-- Use `repair_hoi4_project` in dry-run mode before applying encoding, formatting, or audio fixes. If ffmpeg is missing, ask for user approval; then use `dry_run=false` with `install_ffmpeg=true` only when silent installation is allowed.
+- Use `index_hoi4_project` before broad edits so references, missing assets, localisation keys, and duplicate definitions are checked across the project.
+- Once RHoiScribe is used for a task, run `validate_hoi4_project` before finishing any HOI4 task that changed files.
+- If files were changed, run `repair_hoi4_project` with `dry_run=true`; when it reports repairable encoding, formatting, or media changes, apply them with `repair_hoi4_project` instead of hand-editing individual files.
+- `repair_hoi4_project` enforces UTF-8 BOM for `localisation/**` and `interface/credits.txt`, UTF-8 without BOM for other `txt`/`lua` files, converts detected legacy text encodings to UTF-8, requires wav-only `sound/**`, and checks 44100 Hz 32-bit stereo `music/**.ogg` when ffmpeg probing is available.
+- If ffmpeg is missing, ask for user approval; then use `dry_run=false` with `install_ffmpeg=true` only when silent installation is allowed.
 - Use `edit_hoi4_script_file` for targeted changes to existing files instead of regenerating whole files.
 - Use `generate_gui_gfx_asset` only when the user approves new experimental procedural GUI/GFX assets. Pass `approved=true`; otherwise reuse existing project art.
 - Prefer existing workspace paths and naming conventions before official fallback conventions.

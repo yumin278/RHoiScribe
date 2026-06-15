@@ -103,7 +103,7 @@ fn validation_avoids_gui_name_and_vanilla_texture_false_positives() {
         !result
             .checks
             .iter()
-            .any(|check| check.id == "missing_gfx_texture")
+            .any(|check| check.id == "missing_gfx_texture" && check.status != "green")
     );
     assert!(
         !result
@@ -115,6 +115,60 @@ fn validation_avoids_gui_name_and_vanilla_texture_false_positives() {
 
     fs::remove_dir_all(mod_root).expect("temp output should clean up");
     fs::remove_dir_all(game_root).expect("temp output should clean up");
+}
+
+#[test]
+fn validation_reports_green_checks_for_clean_project_categories() {
+    let root = unique_test_dir("project-validation-clean");
+    write_file(
+        &root,
+        "descriptor.mod",
+        "name=\"Clean Fixture\"\nsupported_version=\"1.19.*\"\n",
+    );
+    write_file(
+        &root,
+        "common/national_focus/sample_tree.txt",
+        "focus_tree = {\n\tid = sample_tree\n\tfocus = { id = sample_clean_focus title = sample_clean_focus desc = sample_clean_focus_desc }\n}\n",
+    );
+    write_file(
+        &root,
+        "interface/sample_interface.gfx",
+        "spriteTypes = { spriteType = { name = \"GFX_sample_clean_panel\" texturefile = \"gfx/interface/sample/clean_panel.png\" } }\n",
+    );
+    write_file(
+        &root,
+        "interface/sample_interface.gui",
+        "guiTypes = { containerWindowType = { name = \"sample_panel\" background = { quadTextureSprite = \"GFX_sample_clean_panel\" } } }\n",
+    );
+    write_file(&root, "gfx/interface/sample/clean_panel.png", "fake png");
+    write_file(
+        &root,
+        "localisation/simp_chinese/clean_fixture_l_simp_chinese.yml",
+        "\u{feff}l_simp_chinese:\n sample_clean_focus:0 \"清晰目标\"\n sample_clean_focus_desc:0 \"全部引用均已落地。\"\n",
+    );
+
+    let result = validate_hoi4_project(ProjectValidationRequest {
+        roots: vec![ScanRoot {
+            path: root.to_string_lossy().to_string(),
+            role: Some("mod".to_string()),
+        }],
+        include_game_roots: Some(true),
+    })
+    .expect("validation should complete");
+
+    assert_eq!(result.status, "green", "{:#?}", result.checks);
+    for id in [
+        "duplicate_definition",
+        "brace_balance",
+        "replace_path",
+        "missing_gfx_texture",
+        "missing_gfx_sprite",
+        "missing_localisation",
+    ] {
+        assert_check(&result.checks, id, "green", "");
+    }
+
+    fs::remove_dir_all(root).expect("temp output should clean up");
 }
 
 fn write_file(root: &std::path::Path, relative_path: &str, content: &str) {

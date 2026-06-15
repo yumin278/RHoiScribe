@@ -50,6 +50,10 @@ pub enum ScriptEditOperation {
         content: String,
         position: Option<String>,
     },
+    UpsertLocalisationEntry {
+        key: String,
+        value: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,15 +80,19 @@ struct ScriptFile {
     path: PathBuf,
     original_bytes: Vec<u8>,
     text: String,
+    localisation: bool,
 }
 
 pub fn edit_hoi4_script_file(
     request: EditHoi4ScriptFileRequest,
 ) -> Result<EditHoi4ScriptFileResult, String> {
     let script = read_script_file(&request.path, request.workspace_root.as_deref())?;
-    let edited = apply_script_operation(&script.text, &request.operation)?;
-    let formatted = maybe_format_script(edited, request.format.unwrap_or(true));
-    ensure_balanced_braces(&formatted)?;
+    let edited = apply_script_operation(&script, &request.operation)?;
+    let formatted =
+        maybe_format_script(edited, request.format.unwrap_or(true), script.localisation);
+    if !script.localisation {
+        ensure_balanced_braces(&formatted)?;
+    }
 
     let output = encode_script_output(&script.path, &formatted);
     let changed = output != script.original_bytes;
@@ -111,38 +119,63 @@ fn read_script_file(path: &str, workspace_root: Option<&str>) -> Result<ScriptFi
         return Err(format!("script file does not exist: {}", path.display()));
     }
     if !is_supported_script_path(&path) {
-        return Err("only HOI4 txt/gui/gfx/lua script files can be edited".to_string());
+        return Err(
+            "only HOI4 txt/gui/gfx/lua script files or localisation yml files can be edited"
+                .to_string(),
+        );
     }
 
     let original_bytes =
         fs::read(&path).map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
     let text = String::from_utf8(strip_bom(&original_bytes).to_vec())
         .map_err(|error| format!("script file must be valid UTF-8: {}", error))?;
-    ensure_balanced_braces(&text)?;
+    let localisation = is_localisation_path(&path);
+    if !localisation {
+        ensure_balanced_braces(&text)?;
+    }
 
     Ok(ScriptFile {
         path,
         original_bytes,
         text,
+        localisation,
     })
 }
 
-fn apply_script_operation(text: &str, operation: &ScriptEditOperation) -> Result<String, String> {
-    match operation {
-        ScriptEditOperation::ReplaceNamedBlock {
-            block_name,
-            content,
-        } => replace_named_block(text, block_name, content),
-        ScriptEditOperation::InsertIntoBlock {
-            parent_block,
-            content,
-            position,
-        } => insert_into_block(text, parent_block, content, position.as_deref()),
+fn apply_script_operation(
+    script: &ScriptFile,
+    operation: &ScriptEditOperation,
+) -> Result<String, String> {
+    match (script.localisation, operation) {
+        (true, ScriptEditOperation::UpsertLocalisationEntry { key, value }) => {
+            upsert_localisation_entry(&script.text, key, value)
+        }
+        (true, _) => {
+            Err("localisation files only support upsert_localisation_entry edits".to_string())
+        }
+        (false, ScriptEditOperation::UpsertLocalisationEntry { .. }) => {
+            Err("upsert_localisation_entry can only edit localisation yml files".to_string())
+        }
+        (
+            false,
+            ScriptEditOperation::ReplaceNamedBlock {
+                block_name,
+                content,
+            },
+        ) => replace_named_block(&script.text, block_name, content),
+        (
+            false,
+            ScriptEditOperation::InsertIntoBlock {
+                parent_block,
+                content,
+                position,
+            },
+        ) => insert_into_block(&script.text, parent_block, content, position.as_deref()),
     }
 }
 
-fn maybe_format_script(text: String, should_format: bool) -> String {
-    if should_format {
+fn maybe_format_script(text: String, should_format: bool, localisation: bool) -> String {
+    if should_format && !localisation {
         format_paradox_script(&text)
     } else {
         text
@@ -266,6 +299,70 @@ fn normalized_block_content(content: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+fn upsert_localisation_entry(text: &str, key: &str, value: &str) -> Result<String, String> {
+    validate_localisation_key(key)?;
+    ensure_localisation_header(text)?;
+
+    let replacement = format!(" {}:0 \"{}\"", key, escape_localisation_value(value));
+    let mut lines = text.lines().map(str::to_string).collect::<Vec<_>>();
+
+    if let Some(line) = lines
+        .iter_mut()
+        .find(|line| localisation_line_key(line).is_some_and(|line_key| line_key == key))
+    {
+        *line = replacement;
+    } else {
+        lines.push(replacement);
+    }
+
+    Ok(lines.join("\n") + "\n")
+}
+
+fn ensure_localisation_header(text: &str) -> Result<(), String> {
+    let Some(first_content_line) = text.lines().find(|line| !line.trim().is_empty()) else {
+        return Err("localisation file is empty".to_string());
+    };
+
+    if first_content_line.trim_start().starts_with("l_")
+        && first_content_line.trim_end().ends_with(':')
+    {
+        Ok(())
+    } else {
+        Err("localisation file must start with an l_<language>: header".to_string())
+    }
+}
+
+fn validate_localisation_key(key: &str) -> Result<(), String> {
+    if key.trim().is_empty() {
+        return Err("localisation key is empty".to_string());
+    }
+    if !key.is_ascii() {
+        return Err("localisation key must be ASCII".to_string());
+    }
+    if key
+        .chars()
+        .any(|character| character.is_ascii_whitespace() || matches!(character, ':' | '"'))
+    {
+        return Err("localisation key must not contain whitespace, colon, or quote".to_string());
+    }
+    Ok(())
+}
+
+fn localisation_line_key(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') || trimmed.starts_with("l_") {
+        return None;
+    }
+
+    let colon = trimmed.find(':')?;
+    let key = trimmed[..colon].trim();
+    (!key.is_empty()).then_some(key)
+}
+
+fn escape_localisation_value(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 fn first_block_name(content: &str) -> Result<String, String> {
     let tokens = tokenize(content);
     for window in tokens.windows(3) {
@@ -362,6 +459,10 @@ fn ensure_balanced_braces(text: &str) -> Result<(), String> {
 }
 
 fn is_supported_script_path(path: &Path) -> bool {
+    is_paradox_script_path(path) || is_localisation_path(path)
+}
+
+fn is_paradox_script_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
@@ -370,6 +471,13 @@ fn is_supported_script_path(path: &Path) -> bool {
                 "txt" | "gui" | "gfx" | "lua"
             )
         })
+}
+
+fn is_localisation_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "yml" | "yaml"))
+        && path_is_under_localisation(path)
 }
 
 fn validate_workspace_script_path(
@@ -402,8 +510,22 @@ fn workspace_root(requested_workspace_root: Option<&str>) -> Result<PathBuf, Str
 }
 
 fn should_have_utf8_bom(path: &Path) -> bool {
-    let normalized = path.to_string_lossy().replace('\\', "/");
-    normalized.contains("/localisation/") || normalized.ends_with("/interface/credits.txt")
+    path_is_under_localisation(path) || path_ends_with(path, "interface/credits.txt")
+}
+
+fn path_is_under_localisation(path: &Path) -> bool {
+    let normalized = normalized_path(path);
+    normalized.starts_with("localisation/") || normalized.contains("/localisation/")
+}
+
+fn path_ends_with(path: &Path, suffix: &str) -> bool {
+    normalized_path(path).ends_with(&suffix.to_ascii_lowercase())
+}
+
+fn normalized_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
 }
 
 fn strip_bom(bytes: &[u8]) -> &[u8] {

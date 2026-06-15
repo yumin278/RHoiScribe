@@ -37,7 +37,7 @@ use crate::{prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatal
 
 pub const SERVER_NAME: &str = "rhoiscribe";
 pub const SERVER_TITLE: &str = "RHoiScribe";
-pub const SERVER_INSTRUCTIONS: &str = "RHoiScribe provides local MCP prompts, resources, and batch tools for HOI4 Modding agents. Use it to reduce web lookups and keep generated mod files aligned with Hearts of Iron IV script conventions.";
+pub const SERVER_INSTRUCTIONS: &str = "RHoiScribe provides local MCP prompts, resources, and batch tools for HOI4 Modding agents. Read bundled resources before web search, use validate_hoi4_project before finishing any file-changing HOI4 task, and run repair_hoi4_project dry_run=true after file changes so encoding, formatting, and media conventions are normalized by the repair tool instead of manual per-file fixes.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerMetadata {
@@ -171,4 +171,16 @@ pub async fn run_stdio_server() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SERVER_INSTRUCTIONS;
+
+    #[test]
+    fn server_instructions_require_delivery_validation_and_repair() {
+        assert!(SERVER_INSTRUCTIONS.contains("validate_hoi4_project before finishing"));
+        assert!(SERVER_INSTRUCTIONS.contains("repair_hoi4_project dry_run=true"));
+        assert!(SERVER_INSTRUCTIONS.contains("instead of manual per-file fixes"));
+    }
 }

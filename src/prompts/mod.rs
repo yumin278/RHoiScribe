@@ -245,8 +245,13 @@ const PROMPT_CONSTRAINTS: &str = "\
              - Priority order: current user request, then conventions discovered in the user's workspace, then bundled RHoiScribe resources, then official HOI4 defaults.\n\
              - Before choosing paths or names, inspect available workspace files and mirror existing folder depth, filename suffixes, tag prefixes, variable names, focus IDs, event namespaces, idea IDs, GUI element names, and localisation key style.\n\
              - For broad edits, first call index_hoi4_project to build definitions and references, then call validate_hoi4_project before writing or claiming the project is clean.\n\
+             - Once this MCP or SKILL has been used for a task, run validate_hoi4_project before finishing any file-changing HOI4 task. If files were changed, also run repair_hoi4_project with dry_run=true and then use repair_hoi4_project apply mode for encoding, formatting, and media normalization when it reports repairable changes.\n\
+             - Do not manually patch encoding or media convention issues file by file. Use repair_hoi4_project to normalize the mod workspace: localisation/** and interface/credits.txt must be UTF-8 with BOM; other txt/lua files must be UTF-8 without BOM; invalid legacy text encodings should be converted to UTF-8 by the repair tool; sound/** audio should be wav; music/** ogg should be 44100 Hz, 32-bit, stereo when ffmpeg probing is available.\n\
              - Before creating new unique identifiers such as TAGs, focus IDs, shared or joint focus IDs, idea tokens, dynamic modifiers, country/global/state/character/MIO/project flags, variables, event namespaces, decisions, characters, scripted effects, or scripted triggers, call scan_unique_identifiers with intent=create. Use intent=reference when the user asks to reuse existing content.\n\
-             - Prefer edit_hoi4_script_file for targeted changes to existing HOI4 txt/gui/gfx/lua files instead of regenerating whole files.\n\
+             - When a generation tool writes files, set dry_run=false only after choosing output_root. Prefer the current mod workspace root or the user-specified output root; never omit output_root and wait for the tool to fail.\n\
+             - Treat generate_localisation_batch as a localisation-only helper with key/value entries. Description text should be its own _desc key/value entry when needed.\n\
+             - Focus, event, and decision batch generators can include complete optional HOI4 blocks supplied per item. For complex focuses, missions, decisions, and event chains, provide icons, triggers, offsets, prerequisites, AI weights, scopes, effects, war warnings, and localisation instead of relying on defaults.\n\
+             - Prefer edit_hoi4_script_file for targeted changes to existing HOI4 txt/gui/gfx/lua/yml files instead of regenerating whole files.\n\
              - Use repair_hoi4_project with dry_run=true before applying encoding, formatting, or audio fixes. If ffmpeg is required and missing, ask for user approval; only then allow dry_run=false with install_ffmpeg=true for a silent installation attempt.\n\
              - Treat generate_gui_gfx_asset as experimental. Use existing project art first unless the user approves new procedural assets; only pass approved=true after that approval, and do not use external image generation models.\n\
              - Do not force flat localisation paths. Nested paths such as localisation/simp_chinese/common/autonomy/custom_autonomy_l_simp_chinese.yml are valid when they match the workspace convention or user request; the language suffix is the normal filename convention, not a TAG naming rule.\n\
@@ -254,8 +259,9 @@ const PROMPT_CONSTRAINTS: &str = "\
              - Keep speaking in the user's initial conversation language. When adding code comments, write clear English comments with no filler.\n\
              - Deliver complete usable content, not skeleton files, TODO placeholders, draft-only text, or follow-up stubs. Do not leave temporary scripts or unrelated generated files behind.\n\
              - Do not damage unrelated workspace content, reset git state, or rewrite files outside the requested scope. If the user permits commits, use Conventional Commits such as feat: add automated release binaries.\n\
-             - Localisation must be finished prose, not placeholders or design notes. For focus descriptions, mission descriptions, event text, and similar player-facing prose, match any existing project narrative style and write polished long-form text unless the user explicitly asks for terse text.\n\
-             - Hide implementation-only triggers/effects and helper modifiers from the player where the file type supports hidden_trigger, hidden_effect, hidden = yes, or equivalent UI omission. Do not expose calculation-only dynamic modifiers as visible player-facing modifiers.\n\
+             - Never write placeholder localisation, design-note localisation, or draft labels as final text. Player-facing localisation must read as prose. For focus descriptions, mission descriptions, event text, and similar narrative copy, write Shakespeare-level polished prose unless the user explicitly asks for terse text.\n\
+             - If the project already contains player-facing prose, summarize its narrative or promotional style first and imitate that style for new localisation.\n\
+             - Hide implementation-only triggers, effects, and helper modifiers from the player where the file type supports hidden_trigger, hidden_effect, hidden = yes, or equivalent UI omission. Do not expose calculation-only dynamic modifiers as visible player-facing modifiers; for example, do not present an internal aggregate such as an OGAS system correction total as a visible dynamic modifier.\n\
              - For focus-tree layout, do not assume x spacing 2 and y spacing 1 until checking whether interface/nationalfocusview.gui exists in the workspace or dependency mods. If custom focus spacing exists, inspect focus_spacing, positionType, and icon dimensions; ask when ambiguous and avoid overlap.\n\
              - Use discover_hoi4_environment to locate game_path, document_path, and version when local game context is needed. Before game debug launch, use validate_hoi4_debug_run and require clean document map/localisation/history folders plus a playset containing only the workspace mod and its dependencies.\n\
              - When investigating crashes or load failures, classify error.log first, correlate entries with changed paths, and use git only for analysis unless the user explicitly permits changes.\n\
@@ -340,6 +346,8 @@ mod tests {
         assert!(text.contains("RED/GREEN/VERIFY"));
         assert!(text.contains("verifiable checklist"));
         assert!(text.contains("fresh verification"));
+        assert!(text.contains("Once this MCP or SKILL has been used"));
+        assert!(text.contains("Do not manually patch encoding"));
     }
 
     #[test]
