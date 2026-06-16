@@ -75,21 +75,21 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "generate_focus_batch",
         title: "Generate focus batch",
-        description: "Generate a HOI4 focus tree. focuses is the JSON array of focus objects; each id renders inside focus = {} and can carry icon, x/y, prerequisites, availability, bypass, AI weights, war warnings, completion rewards, extra_assignments for key/value script, and extra_blocks for raw HOI4 script blocks. When dry_run=false, provide output_root for the current mod or requested output root.",
+        description: "Generate a HOI4 focus tree format skeleton. Use this generator first when creating a new focus file so the base braces and required fields are game-readable, then use edit_hoi4_script_file to replace or insert detailed trigger, effect, icon, layout, AI, and localisation-driven content. When dry_run=false, provide output_root for the current mod or requested output root.",
         required: &["country_tag", "tree_id", "focuses", "dry_run"],
         handler: call_generate_focus_batch,
     },
     ToolSpec {
         name: "generate_event_batch",
         title: "Generate event batch",
-        description: "Generate HOI4 country or news events. events is the JSON array of event objects; options is the JSON array of event choices and renders as HOI4 option = {} blocks, so do not write a literal options block into game files. Each option can carry trigger, ai_chance, effects, hidden_effect, extra_assignments, and extra_blocks. When dry_run=false, provide output_root for the current mod or requested output root.",
+        description: "Generate a HOI4 country/news event format skeleton. events is the JSON array of event objects; options is the JSON array of event choices and renders as HOI4 option = {} blocks, not a literal options block. Use this generator first for a new event file, then use edit_hoi4_script_file to complete narrative triggers, options, hidden effects, follow-up events, pictures, and localisation. When dry_run=false, provide output_root for the current mod or requested output root.",
         required: &["namespace", "events", "dry_run"],
         handler: call_generate_event_batch,
     },
     ToolSpec {
         name: "generate_decision_batch",
         title: "Generate decision batch",
-        description: "Generate a HOI4 decision category. decisions is the JSON array of decision objects; category-level visible/allowed and icon belong to the category, while per-decision visible/available, mission timers, target/cancel/remove triggers, effects, ai_will_do, extra_assignments such as dynamic = yes, and extra_blocks belong to each decision. When dry_run=false, provide output_root for the current mod or requested output root.",
+        description: "Generate a HOI4 decision format skeleton. decisions is the JSON array of decision objects; category-level visible/allowed and icon belong to the category, while per-decision fields belong to each decision. When creating a new decision category, also define or complete common/decisions/categories/*.txt metadata for the category. Use this generator first, then use edit_hoi4_script_file to complete missions, dynamic logic, triggers, effects, target rules, and AI. When dry_run=false, provide output_root for the current mod or requested output root.",
         required: &["category_id", "decisions", "dry_run"],
         handler: call_generate_decision_batch,
     },
@@ -138,7 +138,7 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "validate_hoi4_project",
         title: "Validate HOI4 project",
-        description: "Run red/yellow/green static checks over indexed HOI4 roots for duplicate definitions, brace balance, missing GFX textures or sprites, localisation references, and replace_path risks.",
+        description: "Run red/yellow/green static checks over indexed HOI4 roots for duplicate definitions, brace balance, unclosed blocks, missing GFX textures or sprites, localisation references, structural definitions, and replace_path risks.",
         required: &["roots"],
         handler: call_validate_hoi4_project,
     },
@@ -152,7 +152,7 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "edit_hoi4_script_file",
         title: "Edit HOI4 script file",
-        description: "Modify an existing HOI4 txt/gui/gfx/lua script file inside workspace_root by replacing or inserting a named block, or update a localisation yml key/value entry, with dry-run preview, checks, and encoding preservation.",
+        description: "Modify an existing HOI4 txt/gui/gfx/lua script file inside workspace_root by replacing or inserting a named block, or update a localisation yml key/value entry, with dry-run preview, brace-closure checks for replacement content and final files, and encoding preservation.",
         required: &["path", "operation", "dry_run"],
         handler: call_edit_hoi4_script_file,
     },

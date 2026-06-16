@@ -130,6 +130,10 @@ const CATEGORY_GREEN_CHECKS: &[(&str, &str)] = &[
     ),
     ("brace_balance", "All scanned script braces are balanced."),
     (
+        "unclosed_block",
+        "All opened script blocks close before file end.",
+    ),
+    (
         "replace_path",
         "No descriptor replace_path entries were found in scanned roots.",
     ),
@@ -447,7 +451,14 @@ fn brace_balance_checks(file: ProjectFile) -> Vec<ProjectValidationCheck> {
     if let Some(line) = outcome.first_underflow {
         return vec![brace_underflow_check(&file.relative_path, line)];
     }
-    if outcome.depth != 0 {
+    if outcome.depth > 0 {
+        let line = outcome.unclosed_line();
+        return vec![
+            unclosed_block_check(&file.relative_path, line, outcome.depth),
+            brace_depth_check(&file.relative_path, outcome.last_line, outcome.depth),
+        ];
+    }
+    if outcome.depth < 0 {
         return vec![brace_depth_check(
             &file.relative_path,
             outcome.last_line,
@@ -458,11 +469,18 @@ fn brace_balance_checks(file: ProjectFile) -> Vec<ProjectValidationCheck> {
     Vec::new()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct BraceBalanceOutcome {
     depth: isize,
     first_underflow: Option<usize>,
     last_line: usize,
+    open_lines: Vec<usize>,
+}
+
+impl BraceBalanceOutcome {
+    fn unclosed_line(&self) -> usize {
+        self.open_lines.last().copied().unwrap_or(self.last_line)
+    }
 }
 
 fn brace_balance_outcome(content: &str) -> BraceBalanceOutcome {
@@ -470,6 +488,7 @@ fn brace_balance_outcome(content: &str) -> BraceBalanceOutcome {
         depth: 0,
         first_underflow: None,
         last_line: 1,
+        open_lines: Vec::new(),
     };
     for token in tokenize(content) {
         update_brace_outcome(&mut outcome, token.kind, token.line);
@@ -480,11 +499,17 @@ fn brace_balance_outcome(content: &str) -> BraceBalanceOutcome {
 fn update_brace_outcome(outcome: &mut BraceBalanceOutcome, kind: TokenKind, line: usize) {
     outcome.last_line = line;
     match kind {
-        TokenKind::Open => outcome.depth += 1,
+        TokenKind::Open => {
+            outcome.depth += 1;
+            outcome.open_lines.push(line);
+        }
         TokenKind::Close => {
-            outcome.depth -= 1;
-            if outcome.depth < 0 && outcome.first_underflow.is_none() {
+            if outcome.depth <= 0 {
+                outcome.depth -= 1;
                 outcome.first_underflow = Some(line);
+            } else {
+                outcome.depth -= 1;
+                outcome.open_lines.pop();
             }
         }
         _ => {}
@@ -500,6 +525,24 @@ fn brace_underflow_check(path: &str, line: usize) -> ProjectValidationCheck {
         line,
         "Closing brace appears before a matching opening brace.",
         Some("Remove the extra closing brace or add the missing opening block.".to_string()),
+    )
+}
+
+fn unclosed_block_check(path: &str, line: usize, depth: isize) -> ProjectValidationCheck {
+    check(
+        "unclosed_block",
+        "red",
+        "error",
+        path,
+        line,
+        &format!(
+            "Script block is unclosed; {} opening brace(s) remain before file end.",
+            depth
+        ),
+        Some(
+            "Close every opened `key = { ... }` block before writing or replacing more content."
+                .to_string(),
+        ),
     )
 }
 

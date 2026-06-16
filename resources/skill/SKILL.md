@@ -36,18 +36,12 @@ Use the platform executable name for the current system. On Windows, quote JSON 
 .\rhoiscribe-windows-x86_64.exe --skill call-tool "format_paradox_script" '{ "script": "focus={id=TAG_focus cost=10}" }'
 ```
 
-## Agent Rules
+## Agent Workflow
 
-- Read RHoiScribe resources before searching the web.
-- Use `scan_unique_identifiers` before creating new IDs, flags, variables, tags, ideas, focuses, decisions, characters, scripted triggers, or scripted effects.
-- Use `index_hoi4_project` before broad edits so references, missing assets, localisation keys, and duplicate definitions are checked across the project.
-- Once RHoiScribe is used for a task, run `validate_hoi4_project` before finishing any HOI4 task that changed files.
-- If files were changed, run `repair_hoi4_project` with `dry_run=true`; when it reports repairable encoding, formatting, or media changes, apply them with `repair_hoi4_project` instead of hand-editing individual files.
-- `repair_hoi4_project` enforces UTF-8 BOM for `localisation/**` and `interface/credits.txt`, UTF-8 without BOM for other `txt`/`lua` files, converts detected legacy text encodings to UTF-8, requires wav-only `sound/**`, and checks 44100 Hz 32-bit stereo `music/**.ogg` when ffmpeg probing is available.
-- If ffmpeg is missing, ask for user approval; then use `dry_run=false` with `install_ffmpeg=true` only when silent installation is allowed.
-- Use `edit_hoi4_script_file` for targeted changes to existing files instead of regenerating whole files.
-- Use `generate_gui_gfx_asset` only when the user approves new experimental procedural GUI/GFX assets. Pass `approved=true`; otherwise reuse existing project art.
-- Prefer existing workspace paths and naming conventions before official fallback conventions.
-- Keep file names, folder names, and HOI4 token identifiers ASCII-only unless they are player-facing localisation text.
-- Deliver complete game-readable files, not sketches, TODO placeholders, or partial drafts.
-- Call tools with their documented JSON parameter names. Plural array fields such as `events`, `focuses`, `decisions`, and event `options` are tool input shapes; they are not necessarily literal HOI4 block names in generated files.
+Use this Skill as a launcher for the executable-backed RHoiScribe catalog:
+
+- Run `--skill list-prompts`, then `--skill get-prompt` for the task prompt before planning or editing.
+- Run `--skill list-resources`, then `--skill read-resource` for relevant HOI4 knowledge topics before relying on memory or web search.
+- Run `--skill list-tools` before tool use and follow each returned tool description and JSON input schema.
+- Use `--skill call-tool` for the same tools that the MCP server exposes; tool outputs are JSON and should drive the next step.
+- After RHoiScribe has been used for file-changing HOI4 work, get the current prompt/resource guidance again if the workflow is unclear instead of treating this `SKILL.md` as the full rulebook.

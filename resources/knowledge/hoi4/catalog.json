@@ -639,7 +639,7 @@
         "completion_reward",
         "ai_will_do"
       ],
-      "body": "National focus files define trees, focus nodes, prerequisites, availability, bypass logic, AI weights, and completion rewards. Generated branches need stable IDs, positions, icons, and matching localisation. Batch focus generation can carry optional blocks such as icon, x/y, prerequisite, mutually_exclusive, available, bypass, ai_will_do, will_lead_to_war_with, select_effect, complete_tooltip, completion_reward, and extra raw HOI4 script. Complex focus work should provide complete focus blocks with triggers, offsets, AI weights, rewards, war warnings, and prose localisation rather than relying on defaults. Vanilla focus spacing is only a fallback. Before adding or reshaping a focus tree, inspect the workspace and dependency mods for interface/nationalfocusview.gui. If it exists, derive safe spacing from focus_spacing, positionType, and the actual focus icon dimensions instead of assuming x=2 and y=1. If the project state is ambiguous, ask the user before laying out a tree that could overlap.",
+      "body": "National focus files define trees, focus nodes, prerequisites, availability, bypass logic, AI weights, and completion rewards. Generated branches need stable IDs, positions, icons, and matching localisation. Batch focus generation is a format skeleton workflow for new files: use the generator first so wrapper blocks and braces are game-readable, then use edit_hoi4_script_file to replace or insert complete focus logic, triggers, offsets, AI weights, rewards, war warnings such as will_lead_to_war_with, and prose localisation. Do not treat the skeleton as final content for complex focus requests. Vanilla focus spacing is only a fallback. Before adding or reshaping a focus tree, inspect the workspace and dependency mods for interface/nationalfocusview.gui. If it exists, derive safe spacing from focus_spacing, positionType, and the actual focus icon dimensions instead of assuming x=2 and y=1. If the project state is ambiguous, ask the user before laying out a tree that could overlap.",
       "syntax_blocks": [
         "focus_tree = { id = TAG_01 country = { factor = 0 modifier = { add = 10 tag = TAG } } focus = { id = TAG_01_FS_00 icon = GFX_focus_TAG_01_FS_00 x = 0 y = 0 prerequisite = { focus = TAG_01_FS_PREV } available = { has_government = communism } ai_will_do = { factor = 2 } completion_reward = { hidden_effect = { set_country_flag = TAG_focus_done } add_political_power = 50 } } }"
       ],
@@ -650,7 +650,7 @@
         "Custom nationalfocusview.gui changes how x/y focus coordinates map to pixels and can make vanilla spacing unsafe."
       ],
       "validation": [
-        "For complex focus-tree requests, include optional blocks instead of relying on generator defaults.",
+        "For complex focus-tree requests, generate the skeleton first and then complete the file through edit_hoi4_script_file.",
         "Check position overlap.",
         "Use prerequisites or mutually_exclusive for branches.",
         "Keep focus IDs unique across mods.",
@@ -709,7 +709,7 @@
         "trigger",
         "immediate"
       ],
-      "body": "Country and news_event blocks are namespaced scripted events with title, desc, trigger, immediate effects, and options. They are used for narrative chains, decision outcomes, focus rewards, and on_action responses. Batch event generation can carry event_type, picture, major, is_triggered_only, trigger, mean_time_to_happen, immediate, option trigger, ai_chance, effects, hidden_effect, and extra raw HOI4 script. Complete event chains need scope-aware triggers, options, effects, images when relevant, and finished localisation.",
+      "body": "Country and news_event blocks are namespaced scripted events with title, desc, trigger, immediate effects, and options. They are used for narrative chains, decision outcomes, focus rewards, and on_action responses. Batch event generation is a format skeleton workflow for new event files: use the generator first so namespace, event wrappers, option blocks, and braces are game-readable, then use edit_hoi4_script_file to complete scope-aware triggers, options, effects, images, hidden effects, follow-up calls, and finished localisation. The tool input field options is plural JSON input and renders as repeated HOI4 option = {} blocks; do not write a literal options block into game files.",
       "syntax_blocks": [
         "namespace = my_mod",
         "news_event = { id = my_mod.1 title = my_mod.1.t desc = my_mod.1.d picture = GFX_report_event_generic major = yes trigger = { has_country_flag = my_flag } immediate = { hidden_effect = { set_global_flag = my_seen } } option = { name = my_mod.1.a ai_chance = { factor = 1 } add_war_support = 0.05 } }"
@@ -719,6 +719,7 @@
       ],
       "validation": [
         "Use namespaces.",
+        "For complex event chains, generate the skeleton first and then complete the file through edit_hoi4_script_file.",
         "Ensure option names are localised.",
         "Avoid missing is_triggered_only when event should not pulse.",
         "Hide bookkeeping effects in hidden_effect when the player should not see implementation details.",
@@ -1199,7 +1200,7 @@
         "available",
         "complete_effect"
       ],
-      "body": "Decision categories group decisions; individual decisions control visibility, availability, cost, timers, removal, effects, and AI use. A decision category should be defined as a top-level category block, and category metadata can live in common/decisions/categories/*.txt as a decision category definition while the actual decision entries normally live under common/decisions/*.txt. Generated decisions must distinguish visible from available so unavailable choices can still be intentionally shown. Batch decision generation can carry category icon, category visible/allowed, per-decision icon, cost, fire_only_once, days_remove, days_mission_timeout, visible, available, target_trigger, cancel_trigger, remove_trigger, complete_effect, timeout_effect, remove_effect, ai_will_do, dynamic, and extra raw HOI4 script. Missions, targeted decisions, state-targeted decisions, and gameplay systems require complete available/visible/cancel/timeout/effect logic from resources and workspace context.",
+      "body": "Decision categories group decisions; individual decisions control visibility, availability, cost, timers, removal, effects, and AI use. A decision category should be defined as a top-level category block, and category metadata can live in common/decisions/categories/*.txt as a decision category definition while the actual decision entries normally live under common/decisions/*.txt. When calling the batch decision tool for a new category, the agent must also define or complete the matching common/decisions/categories/*.txt category metadata unless an indexed game or dependency root already provides that category. Batch decision generation is a format skeleton workflow for new decision files: use the generator first so category and decision braces are game-readable, then use edit_hoi4_script_file to complete missions, timers such as days_mission_timeout, dynamic logic, target rules, visible/available gates, effects, timeout/cancel logic, and AI weights. Do not treat the skeleton as final content for missions, targeted decisions, state-targeted decisions, or gameplay systems.",
       "syntax_blocks": [
         "common/decisions/categories/my_categories.txt",
         "my_category = { icon = generic_decisions }",
@@ -1213,6 +1214,8 @@
       ],
       "validation": [
         "Check that every decision category used by common/decisions/*.txt resolves to a category definition when the active mod set is indexed.",
+        "For new categories, create or update common/decisions/categories/*.txt metadata before final validation.",
+        "For complex decision or mission work, generate the skeleton first and then complete the file through edit_hoi4_script_file.",
         "Use visible for display gates and available for click gates.",
         "Set fire_only_once, days_remove, days_mission_timeout, timeout_effect, cancel_trigger, or remove_trigger where relevant.",
         "Check AI weights.",
@@ -1851,12 +1854,14 @@
         "buttonType",
         "iconType",
         "spriteType",
+        "frameAnimatedSpriteType",
         "GFX"
       ],
-      "body": "GUI layout files define windows and controls; GFX files register sprites and images. Generated GUI must keep element names, scripted_gui references, GFX names, and asset paths aligned.",
+      "body": "GUI layout files define windows and controls; GFX files register sprites and images. Generated GUI must keep element names, scripted_gui references, GFX names, and asset paths aligned. Static images usually use spriteType, while animated sprite sheets use frameAnimatedSpriteType with texturefile, frame count, frame rate, and looping metadata that match the existing project style. Do not replace an animated GUI need with a static spriteType unless the user accepts losing animation.",
       "syntax_blocks": [
         "containerWindowType = { name = \"my_window\" position = { x = 0 y = 0 } }",
-        "spriteType = { name = \"GFX_my_sprite\" texturefile = \"gfx/interface/my_mod/my_sprite.png\" }"
+        "spriteType = { name = \"GFX_my_sprite\" texturefile = \"gfx/interface/my_mod/my_sprite.png\" }",
+        "frameAnimatedSpriteType = { name = \"GFX_my_spinner\" texturefile = \"gfx/interface/my_mod/my_spinner.dds\" noOfFrames = 12 animation_rate_fps = 24 looping = yes }"
       ],
       "relationships": [
         "Scripted GUI triggers/effects/properties reference GUI element names.",
@@ -1864,6 +1869,7 @@
       ],
       "validation": [
         "Check GFX_ names match.",
+        "Use frameAnimatedSpriteType for animated sprite sheets and verify the frame metadata matches the asset.",
         "Check asset path exists.",
         "Avoid overlapping UI positions.",
         "Generated comments should be in clear English and explain only non-obvious logic."
@@ -2304,7 +2310,7 @@
         "encoding",
         "references"
       ],
-      "body": "Use index_hoi4_project before broad generation or refactoring so the agent has a structured map of HOI4 definitions, references, files, flags, variables, scripted triggers/effects, focuses, decision categories, event namespaces, GUI elements, GFX sprites, texture paths, and localisation keys. Use validate_hoi4_project after indexing and before finishing to return red/yellow/green checks for duplicate definitions, brace balance, missing GFX textures or sprite references, missing localisation references, missing_structural_definition checks for decision categories, event namespaces, and scripted effects, and replace_path risks. Use repair_hoi4_project in dry-run mode after file changes, then use repair_hoi4_project apply mode to normalize repairable UTF-8 BOM rules, detected legacy text encodings, Paradox script formatting, sound/music checks, or ffmpeg-assisted media convention issues. Do not manually patch encoding or media convention issues file by file; normalize the mod workspace through the repair tool. If ffmpeg is needed and absent, ask the user for approval before installation. Use edit_hoi4_script_file for targeted replacement or insertion of named blocks in existing script files, or for localisation yml key/value updates, instead of regenerating whole files; pass workspace_root so edits cannot escape the current mod or workspace tree. When generation tools write files, agents must provide output_root for the current mod workspace or user-requested output root. generate_localisation_batch is a localisation-only helper with key/value entries; description text should be supplied as its own _desc key/value entry.",
+      "body": "Use index_hoi4_project before broad generation or refactoring so the agent has a structured map of HOI4 definitions, references, files, flags, variables, scripted triggers/effects, focuses, decision categories, event namespaces, GUI elements, GFX sprites, texture paths, and localisation keys. Use validate_hoi4_project after indexing and before finishing to return red/yellow/green checks for duplicate definitions, brace balance, unclosed_block, missing GFX textures or sprite references, missing localisation references, missing_structural_definition checks for decision categories, event namespaces, and scripted effects, and replace_path risks. Use repair_hoi4_project in dry-run mode after file changes, then use repair_hoi4_project apply mode to normalize repairable UTF-8 BOM rules, detected legacy text encodings, Paradox script formatting, sound/music checks, or ffmpeg-assisted media convention issues. Do not manually patch encoding or media convention issues file by file; normalize the mod workspace through the repair tool. If ffmpeg is needed and absent, ask the user for approval before installation. Use focus, event, and decision batch generators as skeleton builders for new files, then use edit_hoi4_script_file for targeted replacement or insertion of detailed named blocks; pass workspace_root so edits cannot escape the current mod or workspace tree and verify every replacement keeps { } pairs closed. When generation tools write files, agents must provide output_root for the current mod workspace or user-requested output root. generate_localisation_batch is a localisation-only helper with key/value entries; description text should be supplied as its own _desc key/value entry.",
       "syntax_blocks": [
         "index_hoi4_project { roots = [{ path = \"<MOD_ROOT>\", role = \"mod\" }] include_game_roots = true }",
         "validate_hoi4_project { roots = [{ path = \"<MOD_ROOT>\", role = \"mod\" }] }",
@@ -2322,6 +2328,8 @@
         "Run dry-run mode before applying repairs or edits.",
         "Run validate_hoi4_project before finishing after RHoiScribe-assisted file changes.",
         "Treat missing_structural_definition as a red check: define missing decision categories, event namespaces, and similar indexed structures or correct the references.",
+        "Treat unclosed_block and brace_balance red checks as blockers before finishing or launching the game.",
+        "Before replacing a script block, check that the replacement content has balanced { } pairs and one complete named block.",
         "Run repair_hoi4_project dry_run=true after file changes and use repair_hoi4_project apply mode for repairable encoding, formatting, and media convention changes.",
         "Do not manually patch encoding or media convention issues file by file.",
         "When dry_run=false for a generation tool, include output_root instead of relying on the tool error.",
@@ -2353,18 +2361,20 @@
         "approved=true",
         "procedural_png",
         "spriteType",
+        "frameAnimatedSpriteType",
         "quadTextureSprite",
         "experimental",
         "no_external_image_models"
       ],
-      "body": "generate_gui_gfx_asset is an experimental local pipeline for making HOI4 interface assets when existing project art is not enough and the user approves new generated assets. It does not depend on external image models. The tool procedurally renders a PNG, returns an editable SVG approximation, writes a .gfx spriteType registration, and can also produce an optional .gui file. Agents should prefer existing workspace art first, ask before creating new visual assets, and pass approved=true only after user approval.",
+      "body": "generate_gui_gfx_asset is an experimental local pipeline for making HOI4 interface assets when existing project art is not enough and the user approves new generated assets. It does not depend on external image models. The tool procedurally renders a PNG, returns an editable SVG approximation, writes a .gfx spriteType registration, and can also produce an optional .gui file. Static generated assets normally register through spriteType. Animated UI work should use frameAnimatedSpriteType knowledge and existing sprite-sheet conventions; do not claim the procedural PNG pipeline has produced animation unless the generated files and metadata actually define frames. Agents should prefer existing workspace art first, ask before creating new visual assets, and pass approved=true only after user approval.",
       "syntax_blocks": [
         "generate_gui_gfx_asset { asset_name = \"TAG_command_button\" sprite_name = \"GFX_TAG_command_button\" width = 128 height = 64 style = \"button\" approved = true dry_run = true }",
         "spriteType = { name = \"GFX_TAG_command_button\" texturefile = \"gfx/interface/TAG/TAG_command_button.png\" }",
+        "frameAnimatedSpriteType = { name = \"GFX_TAG_spinner\" texturefile = \"gfx/interface/TAG/TAG_spinner.dds\" noOfFrames = 8 animation_rate_fps = 16 looping = yes }",
         "iconType = { name = \"TAG_command_button\" quadTextureSprite = \"GFX_TAG_command_button\" }"
       ],
       "relationships": [
-        "GUI layout consumes sprite names through quadTextureSprite or spriteType fields.",
+        "GUI layout consumes sprite names through quadTextureSprite, spriteType, or frameAnimatedSpriteType-backed fields.",
         "GFX sprite registration links interface script to the generated PNG path.",
         "validate_hoi4_project can report missing sprite definitions or texture files after asset generation.",
         "repair_hoi4_project can confirm script encoding and formatting around generated .gfx/.gui files."
@@ -2374,6 +2384,7 @@
         "Use dry_run first and inspect the PNG preview before write mode.",
         "Keep asset_name, sprite_name, gui_name, paths, and script tokens ASCII-only.",
         "Use mod-specific gfx/interface subdirectories to avoid collisions.",
+        "Use frameAnimatedSpriteType only when the asset is an actual animated sprite sheet with matching frame metadata.",
         "Do not claim visual fit until the user or game/debug validation confirms the asset works in context.",
         "Prefer existing art when the user has not approved procedural generation."
       ],

@@ -37,7 +37,7 @@ use crate::{prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatal
 
 pub const SERVER_NAME: &str = "rhoiscribe";
 pub const SERVER_TITLE: &str = "RHoiScribe";
-pub const SERVER_INSTRUCTIONS: &str = "RHoiScribe provides local MCP prompts, resources, and batch tools for HOI4 Modding agents. Read bundled resources before web search, use validate_hoi4_project before finishing any file-changing HOI4 task, and run repair_hoi4_project dry_run=true after file changes so encoding, formatting, and media conventions are normalized by the repair tool instead of manual per-file fixes.";
+pub const SERVER_INSTRUCTIONS: &str = "RHoiScribe provides local MCP prompts, resources, and batch tools for HOI4 Modding agents. Read bundled resources before web search, use focus/event/decision batch tools as new-file skeleton builders, complete detailed script logic through edit_hoi4_script_file, use validate_hoi4_project before finishing any file-changing HOI4 task, treat unclosed_block and brace_balance red checks as blockers, and run repair_hoi4_project dry_run=true after file changes so encoding, formatting, and media conventions are normalized by the repair tool instead of manual per-file fixes.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerMetadata {
