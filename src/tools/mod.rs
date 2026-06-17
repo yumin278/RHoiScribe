@@ -190,9 +190,14 @@ pub struct LocalisationEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct FocusEntry {
     pub id: String,
+    #[serde(alias = "sprite")]
     pub icon: Option<String>,
+    #[serde(alias = "position_x", alias = "offset_x")]
     pub x: Option<i32>,
+    #[serde(alias = "position_y", alias = "offset_y")]
     pub y: Option<i32>,
+    #[serde(default, alias = "pos")]
+    pub position: Option<LayoutPosition>,
     pub cost: Option<i32>,
     #[serde(default)]
     pub prerequisite: Vec<String>,
@@ -206,6 +211,7 @@ pub struct FocusEntry {
     pub will_lead_to_war_with: Option<String>,
     pub select_effect: Option<String>,
     pub complete_tooltip: Option<String>,
+    #[serde(alias = "completion_effect", alias = "effect", alias = "effects")]
     pub completion_reward: Option<String>,
     pub ai_will_do: Option<String>,
     #[serde(default)]
@@ -239,6 +245,7 @@ pub struct EventEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DecisionEntry {
     pub id: String,
+    #[serde(alias = "decision_icon", alias = "sprite")]
     pub icon: Option<String>,
     pub cost: Option<i32>,
     pub fire_only_once: Option<bool>,
@@ -249,6 +256,7 @@ pub struct DecisionEntry {
     pub target_trigger: Option<String>,
     pub cancel_trigger: Option<String>,
     pub remove_trigger: Option<String>,
+    #[serde(alias = "completion_effect", alias = "effect", alias = "effects")]
     pub complete_effect: Option<String>,
     pub timeout_effect: Option<String>,
     pub remove_effect: Option<String>,
@@ -257,6 +265,12 @@ pub struct DecisionEntry {
     pub extra_assignments: Vec<ScriptAssignment>,
     #[serde(default)]
     pub extra_blocks: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LayoutPosition {
+    pub x: Option<i32>,
+    pub y: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -434,7 +448,7 @@ impl ToolSpec {
         Tool::new(
             Cow::Borrowed(self.name),
             Cow::Borrowed(self.description),
-            input_schema(self.required),
+            input_schema(self.name, self.required),
         )
         .with_title(self.title)
         .with_annotations(
@@ -787,7 +801,7 @@ fn call_format_paradox_script(arguments: JsonObject) -> Result<CallToolResult, T
     )))
 }
 
-fn input_schema(required: &[&str]) -> JsonObject {
+fn input_schema(tool_name: &str, required: &[&str]) -> JsonObject {
     let mut schema = Map::new();
     schema.insert("type".to_string(), Value::String("object".to_string()));
     schema.insert(
@@ -800,7 +814,90 @@ fn input_schema(required: &[&str]) -> JsonObject {
         ),
     );
     schema.insert("additionalProperties".to_string(), Value::Bool(true));
+    let properties = tool_properties(tool_name);
+    if !properties.is_empty() {
+        schema.insert("properties".to_string(), Value::Object(properties));
+    }
     schema
+}
+
+fn tool_properties(tool_name: &str) -> Map<String, Value> {
+    match tool_name {
+        "generate_focus_batch" => focus_batch_properties(),
+        "generate_decision_batch" => decision_batch_properties(),
+        _ => Map::new(),
+    }
+}
+
+fn focus_batch_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "country_tag",
+            "Country TAG used by the focus_tree country selector.",
+        ),
+        text_property("tree_id", "Focus tree id and output filename stem."),
+        array_property(
+            "focuses",
+            "Focus objects. Each object supports id, icon, x, y, position:{x,y}, cost, prerequisite, mutually_exclusive, available, bypass, will_lead_to_war_with, select_effect, complete_tooltip, completion_reward, effect/effects as completion_reward aliases, ai_will_do, extra_assignments, and extra_blocks.",
+        ),
+        bool_property(
+            "dry_run",
+            "true returns generated files without writing them.",
+        ),
+        text_property(
+            "output_root",
+            "Required when dry_run=false; use the current mod workspace root or the user-requested output root.",
+        ),
+    ])
+}
+
+fn decision_batch_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "category_id",
+            "Decision category block id and output filename stem.",
+        ),
+        text_property(
+            "icon",
+            "Category icon. Per-decision icons belong inside decisions[].",
+        ),
+        text_property("visible", "Optional category-level visible block body."),
+        text_property("allowed", "Optional category-level allowed block body."),
+        array_property(
+            "decisions",
+            "Decision objects. Each object supports id, icon, decision_icon as an icon alias, cost, fire_only_once, days_remove, days_mission_timeout, visible, available, target_trigger, cancel_trigger, remove_trigger, complete_effect, effect/effects/completion_effect as complete_effect aliases, timeout_effect, remove_effect, ai_will_do, extra_assignments, and extra_blocks.",
+        ),
+        bool_property(
+            "dry_run",
+            "true returns generated files without writing them.",
+        ),
+        text_property(
+            "output_root",
+            "Required when dry_run=false; use the current mod workspace root or the user-requested output root.",
+        ),
+    ])
+}
+
+fn text_property(name: &str, description: &str) -> (String, Value) {
+    described_property(name, "string", description)
+}
+
+fn array_property(name: &str, description: &str) -> (String, Value) {
+    described_property(name, "array", description)
+}
+
+fn bool_property(name: &str, description: &str) -> (String, Value) {
+    described_property(name, "boolean", description)
+}
+
+fn described_property(name: &str, property_type: &str, description: &str) -> (String, Value) {
+    (
+        name.to_string(),
+        json!({
+            "type": property_type,
+            "description": description
+        }),
+    )
 }
 
 fn finish_generation(
@@ -938,13 +1035,8 @@ fn render_focus_entry(focus: &FocusEntry, index: usize) -> String {
             .as_deref()
             .unwrap_or(&format!("GFX_focus_{}", focus.id)),
     );
-    push_assignment(
-        &mut content,
-        2,
-        "x",
-        &focus.x.unwrap_or((index * 2) as i32).to_string(),
-    );
-    push_assignment(&mut content, 2, "y", &focus.y.unwrap_or(0).to_string());
+    push_assignment(&mut content, 2, "x", &focus_x(focus, index).to_string());
+    push_assignment(&mut content, 2, "y", &focus_y(focus).to_string());
     push_assignment(
         &mut content,
         2,
@@ -1009,6 +1101,20 @@ fn render_focus_entry(focus: &FocusEntry, index: usize) -> String {
     push_extra_blocks(&mut content, 2, &focus.extra_blocks);
     content.push_str("\t}\n");
     content
+}
+
+fn focus_x(focus: &FocusEntry, index: usize) -> i32 {
+    focus
+        .x
+        .or_else(|| focus.position.as_ref().and_then(|position| position.x))
+        .unwrap_or((index * 2) as i32)
+}
+
+fn focus_y(focus: &FocusEntry) -> i32 {
+    focus
+        .y
+        .or_else(|| focus.position.as_ref().and_then(|position| position.y))
+        .unwrap_or(0)
 }
 
 fn render_event_entry(namespace: &str, event: &EventEntry, index: usize) -> String {
