@@ -242,7 +242,9 @@ fn scan_focus_event_assignment(
     current_block: Option<&str>,
     output: &mut WorkerOutput,
 ) {
-    if let Some((kind, context)) = id_definition_kind(key, current_block) {
+    let path = file.relative_path.as_str();
+
+    if let Some((kind, context)) = id_definition_kind(path, key, current_block) {
         push_definition(file, output, kind, value, line, context);
         if kind == "event_id"
             && let Some(namespace) = event_namespace_from_id(value)
@@ -256,11 +258,15 @@ fn scan_focus_event_assignment(
                 "event id namespace",
             );
         }
+    } else if key == "id" && is_event_block(current_block) {
+        push_event_reference(file, value, line, "event call id", output);
     }
-    if matches!(key, "shared_focus" | "joint_focus") {
+
+    if is_focus_definition_path(path) && matches!(key, "shared_focus" | "joint_focus") {
         push_reference(file, output, "focus_id", value, line, key);
     }
-    if matches!(key, "namespace" | "add_namespace") {
+
+    if is_event_definition_path(path) && matches!(key, "namespace" | "add_namespace") {
         push_definition(file, output, "event_namespace", value, line, key);
     }
 }
@@ -421,6 +427,7 @@ fn event_namespace_from_id(value: &str) -> Option<&str> {
 }
 
 fn id_definition_kind(
+    path: &str,
     key: &str,
     current_block: Option<&str>,
 ) -> Option<(&'static str, &'static str)> {
@@ -428,13 +435,34 @@ fn id_definition_kind(
         return None;
     }
     match current_block {
-        Some("focus" | "shared_focus" | "joint_focus") => Some(("focus_id", "focus id")),
-        Some("focus_tree") => Some(("focus_tree_id", "focus tree id")),
-        Some("country_event" | "news_event" | "state_event" | "unit_event") => {
+        Some("focus" | "shared_focus" | "joint_focus") if is_focus_definition_path(path) => {
+            Some(("focus_id", "focus id"))
+        }
+        Some("focus_tree") if is_focus_definition_path(path) => {
+            Some(("focus_tree_id", "focus tree id"))
+        }
+        Some("country_event" | "news_event" | "state_event" | "unit_event")
+            if is_event_definition_path(path) =>
+        {
             Some(("event_id", "event id"))
         }
         _ => None,
     }
+}
+
+fn is_focus_definition_path(path: &str) -> bool {
+    path.starts_with("common/national_focus/")
+}
+
+fn is_event_definition_path(path: &str) -> bool {
+    path.starts_with("events/")
+}
+
+fn is_event_block(block: Option<&str>) -> bool {
+    matches!(
+        block,
+        Some("country_event" | "news_event" | "state_event" | "unit_event")
+    )
 }
 
 fn scan_country_tag_assignment(file: &ScanFile, key: &str, line: usize, output: &mut WorkerOutput) {

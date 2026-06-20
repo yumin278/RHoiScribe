@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use self::project_index_scan::scan_text_file;
 use super::ScanRoot;
+use super::project_effective_files::effective_project_files;
 use super::project_files::{ProjectFile, collect_project_files};
 
 #[path = "project_index_scan.rs"]
@@ -83,6 +84,13 @@ pub(super) struct WorkerOutput {
     pub(super) references: Vec<ProjectIndexItem>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct CollectedScanFiles {
+    files: Vec<ScanFile>,
+    hidden_by_replace_path: usize,
+    shadowed_by_logical_path: usize,
+}
+
 pub fn index_hoi4_project(request: ProjectIndexRequest) -> Result<ProjectIndexResult, String> {
     if request.roots.is_empty() {
         return Err("at least one project root is required".to_string());
@@ -102,9 +110,9 @@ pub fn index_hoi4_project(request: ProjectIndexRequest) -> Result<ProjectIndexRe
         return Err("no roots remain after filtering game roots".to_string());
     }
 
-    let scan_files = collect_scan_files(&roots)?;
-    let worker_count = worker_count(scan_files.len());
-    let outputs = scan_files_parallel(scan_files, worker_count)?;
+    let collected = collect_scan_files(&roots)?;
+    let worker_count = worker_count(collected.files.len());
+    let outputs = scan_files_parallel(collected.files, worker_count)?;
     let mut files = Vec::new();
     let mut definitions = Vec::new();
     let mut references = Vec::new();
@@ -121,22 +129,36 @@ pub fn index_hoi4_project(request: ProjectIndexRequest) -> Result<ProjectIndexRe
 
     let scanned_files = files.len();
 
+    let messages = index_messages(
+        scanned_files,
+        worker_count,
+        collected.hidden_by_replace_path,
+        collected.shadowed_by_logical_path,
+    );
+
     Ok(ProjectIndexResult {
         scanned_roots: roots.len(),
         scanned_files,
         files,
         definitions,
         references,
-        messages: vec![format!(
-            "indexed {} file(s) with {} worker(s)",
-            scanned_files, worker_count
-        )],
+        messages,
     })
 }
 
-fn collect_scan_files(roots: &[ScanRoot]) -> Result<Vec<ScanFile>, String> {
-    collect_project_files(roots, should_index_file)
-        .map(|files| files.into_iter().map(scan_file_from_project_file).collect())
+fn collect_scan_files(roots: &[ScanRoot]) -> Result<CollectedScanFiles, String> {
+    let effective_files = effective_project_files(collect_project_files(roots, should_index_file)?);
+    let files = effective_files
+        .files
+        .into_iter()
+        .map(scan_file_from_project_file)
+        .collect();
+
+    Ok(CollectedScanFiles {
+        files,
+        hidden_by_replace_path: effective_files.hidden_by_replace_path,
+        shadowed_by_logical_path: effective_files.shadowed_by_logical_path,
+    })
 }
 
 fn scan_files_parallel(
@@ -292,6 +314,27 @@ fn scan_file_from_project_file(file: ProjectFile) -> ScanFile {
         file_type,
         bytes: file.bytes,
     }
+}
+
+fn index_messages(
+    scanned_files: usize,
+    worker_count: usize,
+    hidden_by_replace_path: usize,
+    shadowed_by_logical_path: usize,
+) -> Vec<String> {
+    let mut messages = vec![format!(
+        "indexed {} file(s) with {} worker(s)",
+        scanned_files, worker_count
+    )];
+
+    if hidden_by_replace_path > 0 || shadowed_by_logical_path > 0 {
+        messages.push(format!(
+            "effective file filtering skipped {} replace_path-hidden file(s) and {} logical-path override(s)",
+            hidden_by_replace_path, shadowed_by_logical_path
+        ));
+    }
+
+    messages
 }
 
 fn worker_count(file_count: usize) -> usize {

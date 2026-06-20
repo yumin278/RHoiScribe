@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         rhoiscribe::cli::CliCommand::PrintCommand => {
-            println!("{}", rhoiscribe::cli::command_path()?.display());
+            println!("{}", rhoiscribe::cli::command_path_for_mcp_json()?);
             Ok(())
         }
         rhoiscribe::cli::CliCommand::Skill(command) => {

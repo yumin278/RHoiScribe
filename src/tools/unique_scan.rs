@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 
 use super::hoi4_keys::{flag_entity_type, normalize_entity_type};
 use super::paradox_lexer::{Token, TokenKind, tokenize};
+use super::project_effective_files::effective_project_files;
 use super::project_files::{ProjectFile, collect_project_files};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -111,6 +112,13 @@ struct ReplacePathHit {
     line: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+struct CollectedProjectFiles {
+    files: Vec<ProjectFile>,
+    hidden_by_replace_path: usize,
+    shadowed_by_logical_path: usize,
+}
+
 pub fn scan_unique_identifiers(
     request: UniqueIdentifierScanRequest,
 ) -> Result<UniqueIdentifierScanResult, String> {
@@ -123,9 +131,9 @@ pub fn scan_unique_identifiers(
     }
 
     let candidate_lookup = Arc::new(candidate_lookup(&request.candidates));
-    let scan_files = collect_scan_files(&request.roots)?;
-    let worker_count = worker_count(scan_files.len());
-    let outputs = scan_files_parallel(scan_files.clone(), worker_count, candidate_lookup)?;
+    let collected = collect_scan_files(&request.roots)?;
+    let worker_count = worker_count(collected.files.len());
+    let outputs = scan_files_parallel(collected.files, worker_count, candidate_lookup)?;
     let mut matches = Vec::new();
     let mut replace_paths = Vec::new();
     let mut scanned_files = 0usize;
@@ -165,10 +173,12 @@ pub fn scan_unique_identifiers(
         path_risks,
         scanned_roots: request.roots.len(),
         scanned_files,
-        messages: vec![format!(
-            "scanned {} files with {} worker(s)",
-            scanned_files, worker_count
-        )],
+        messages: scan_messages(
+            scanned_files,
+            worker_count,
+            collected.hidden_by_replace_path,
+            collected.shadowed_by_logical_path,
+        ),
     })
 }
 
@@ -185,8 +195,13 @@ fn candidate_lookup(candidates: &[IdentifierCandidate]) -> HashMap<String, HashS
     lookup
 }
 
-fn collect_scan_files(roots: &[ScanRoot]) -> Result<Vec<ProjectFile>, String> {
-    collect_project_files(roots, should_scan_file)
+fn collect_scan_files(roots: &[ScanRoot]) -> Result<CollectedProjectFiles, String> {
+    let effective_files = effective_project_files(collect_project_files(roots, should_scan_file)?);
+    Ok(CollectedProjectFiles {
+        files: effective_files.files,
+        hidden_by_replace_path: effective_files.hidden_by_replace_path,
+        shadowed_by_logical_path: effective_files.shadowed_by_logical_path,
+    })
 }
 
 fn should_scan_file(relative_path: &str) -> bool {
@@ -659,7 +674,9 @@ fn scan_id_assignment(
         return;
     }
 
-    let Some((entity_type, kind, context)) = id_assignment_kind(current_block) else {
+    let Some((entity_type, kind, context)) =
+        id_assignment_kind(file.relative_path.as_str(), current_block)
+    else {
         return;
     };
     if has_candidate(candidate_lookup, entity_type, value) {
@@ -667,7 +684,10 @@ fn scan_id_assignment(
     }
 }
 
-fn id_assignment_kind(block: Option<&str>) -> Option<(&'static str, &'static str, &'static str)> {
+fn id_assignment_kind(
+    path: &str,
+    block: Option<&str>,
+) -> Option<(&'static str, &'static str, &'static str)> {
     const ID_ASSIGNMENTS: &[(&str, &str, &str, &str)] = &[
         ("focus", "focus_id", "focus", "id inside focus-like block"),
         (
@@ -695,6 +715,12 @@ fn id_assignment_kind(block: Option<&str>) -> Option<(&'static str, &'static str
     ];
 
     let block = block?;
+    if is_focus_block(block) && !is_focus_definition_path(path) {
+        return None;
+    }
+    if is_event_block(block) && !is_event_definition_path(path) {
+        return None;
+    }
     ID_ASSIGNMENTS
         .iter()
         .find(|(candidate, _, _, _)| *candidate == block)
@@ -709,7 +735,8 @@ fn scan_reusable_focus_reference(
     candidate_lookup: &HashMap<String, HashSet<String>>,
     output: &mut WorkerOutput,
 ) {
-    if matches!(key, "shared_focus" | "joint_focus")
+    if file.relative_path.starts_with("common/national_focus/")
+        && matches!(key, "shared_focus" | "joint_focus")
         && has_candidate(candidate_lookup, "focus_id", value)
     {
         push_match(
@@ -732,7 +759,10 @@ fn scan_event_namespace(
     candidate_lookup: &HashMap<String, HashSet<String>>,
     output: &mut WorkerOutput,
 ) {
-    if key == "namespace" && has_candidate(candidate_lookup, "event_namespace", value) {
+    if file.relative_path.starts_with("events/")
+        && matches!(key, "namespace" | "add_namespace")
+        && has_candidate(candidate_lookup, "event_namespace", value)
+    {
         push_match(
             file,
             output,
@@ -743,6 +773,49 @@ fn scan_event_namespace(
             "event namespace assignment",
         );
     }
+}
+
+fn scan_messages(
+    scanned_files: usize,
+    worker_count: usize,
+    hidden_by_replace_path: usize,
+    shadowed_by_logical_path: usize,
+) -> Vec<String> {
+    let mut messages = vec![format!(
+        "scanned {} files with {} worker(s)",
+        scanned_files, worker_count
+    )];
+
+    if hidden_by_replace_path > 0 || shadowed_by_logical_path > 0 {
+        messages.push(format!(
+            "effective file filtering skipped {} replace_path-hidden file(s) and {} logical-path override(s)",
+            hidden_by_replace_path, shadowed_by_logical_path
+        ));
+    }
+
+    messages
+}
+
+fn is_focus_definition_path(path: &str) -> bool {
+    path.starts_with("common/national_focus/")
+}
+
+fn is_event_definition_path(path: &str) -> bool {
+    path.starts_with("events/")
+}
+
+fn is_focus_block(block: &str) -> bool {
+    matches!(
+        block,
+        "focus" | "shared_focus" | "joint_focus" | "focus_tree"
+    )
+}
+
+fn is_event_block(block: &str) -> bool {
+    matches!(
+        block,
+        "country_event" | "news_event" | "state_event" | "unit_event"
+    )
 }
 
 fn scan_country_tag_assignment(

@@ -19,7 +19,11 @@
 // https://github.com/czxieddan/RHoiScribe
 //------------------------------------------------------------------------------------
 
-use std::{error::Error, fmt, io, path::PathBuf};
+use std::{
+    error::Error,
+    fmt, io,
+    path::{Path, PathBuf},
+};
 
 pub type SkillCliCommand = crate::skill::SkillCommand;
 
@@ -158,6 +162,14 @@ pub fn version_text() -> String {
 
 pub fn command_path() -> io::Result<PathBuf> {
     std::env::current_exe()
+}
+
+pub fn command_path_for_mcp_json() -> io::Result<String> {
+    command_path().map(|path| path_for_mcp_json(&path))
+}
+
+pub fn path_for_mcp_json(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "\\\\")
 }
 
 pub fn help_text() -> &'static str {

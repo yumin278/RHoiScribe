@@ -25,6 +25,7 @@ mod gui_gfx_asset;
 mod hoi4_keys;
 mod mod_skeleton;
 mod paradox_lexer;
+mod project_effective_files;
 mod project_files;
 mod project_index;
 mod project_repair;
