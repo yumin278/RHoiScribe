@@ -20,7 +20,8 @@
 //------------------------------------------------------------------------------------
 
 use std::{
-    fs,
+    fs::{self, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -43,7 +44,7 @@ impl RnmdbSingleFilePageStore {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
 
-        let page_key = rhoiscribe_page_key();
+        let page_key = rhoiscribe_page_key()?;
         let backend = if path.exists() {
             SingleFileBackend::open_with_key(path, page_key).map_err(|error| error.to_string())?
         } else {
@@ -127,6 +128,86 @@ fn user_home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn rhoiscribe_page_key() -> PageCryptoKey {
-    PageCryptoKey::from_bytes(*b"RHoiScribe RNMDB v1 page key!!01")
+fn rhoiscribe_page_key() -> Result<PageCryptoKey, String> {
+    let path = default_rhoiscribe_dir().join("rnmdb-page.key");
+    match read_page_key(&path) {
+        Ok(Some(bytes)) => Ok(PageCryptoKey::from_bytes(bytes)),
+        Ok(None) => create_page_key(&path).map(PageCryptoKey::from_bytes),
+        Err(error) => Err(error),
+    }
+}
+
+fn read_page_key(path: &Path) -> Result<Option<[u8; 32]>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    decode_hex_key(content.trim()).map(Some)
+}
+
+fn create_page_key(path: &Path) -> Result<[u8; 32], String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let mut bytes = [0_u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|error| error.to_string())?;
+    match write_new_page_key(path, &bytes) {
+        Ok(()) => Ok(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => read_page_key(path)?
+            .ok_or_else(|| "RNMDB page key was created concurrently but is empty".to_string()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn write_new_page_key(path: &Path, bytes: &[u8; 32]) -> std::io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    file.write_all(encode_hex_key(bytes).as_bytes())?;
+    file.write_all(b"\n")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    file.sync_all()
+}
+
+fn encode_hex_key(bytes: &[u8; 32]) -> String {
+    let mut output = String::with_capacity(64);
+    for byte in bytes {
+        output.push(nibble_to_hex(byte >> 4));
+        output.push(nibble_to_hex(byte & 0x0f));
+    }
+    output
+}
+
+fn decode_hex_key(value: &str) -> Result<[u8; 32], String> {
+    if value.len() != 64 {
+        return Err("RNMDB page key must be 64 hexadecimal characters".to_string());
+    }
+
+    let mut bytes = [0_u8; 32];
+    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_to_nibble(chunk[0])?;
+        let low = hex_to_nibble(chunk[1])?;
+        bytes[index] = (high << 4) | low;
+    }
+    Ok(bytes)
+}
+
+fn nibble_to_hex(value: u8) -> char {
+    match value {
+        0..=9 => char::from(b'0' + value),
+        10..=15 => char::from(b'a' + value - 10),
+        _ => unreachable!("nibble values are always <= 15"),
+    }
+}
+
+fn hex_to_nibble(value: u8) -> Result<u8, String> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err("RNMDB page key contains a non-hexadecimal character".to_string()),
+    }
 }

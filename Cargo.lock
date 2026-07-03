@@ -634,6 +634,7 @@ version = "0.2.4"
 dependencies = [
  "anyhow",
  "encoding_rs",
+ "getrandom 0.2.17",
  "rchadow",
  "rmcp",
  "rnmdb-common",

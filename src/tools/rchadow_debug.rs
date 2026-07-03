@@ -76,109 +76,210 @@ enum DebugPersistenceMode {
     Disk,
 }
 
+struct DebugLaunchInputs {
+    game_path: PathBuf,
+    document_path: PathBuf,
+    workspace_mod_path: PathBuf,
+    mode: DebugPersistenceMode,
+    launch: bool,
+    apply_playset: bool,
+    store_path: Option<PathBuf>,
+}
+
+struct DebugExecution {
+    launched: bool,
+    applied_playset: bool,
+    enabled_mods: Vec<String>,
+    dlc_load_path: Option<String>,
+}
+
 pub fn launch_hoi4_debug_with_rchadow(
     request: RchadowDebugLaunchRequest,
 ) -> Result<RchadowDebugLaunchResult, String> {
-    let game_path = PathBuf::from(clean_input_path(&request.game_path));
-    let document_path = PathBuf::from(clean_input_path(&request.document_path));
-    let workspace_mod_path = PathBuf::from(clean_input_path(&request.workspace_mod_path));
-    let mode = choose_mode(&request);
-    let launch = request.launch.unwrap_or(false);
-    let apply_playset = request.apply_playset.unwrap_or(true);
-    let mut messages = vec![format!("Rchadow debug mode selected: {}", mode.as_str())];
+    let inputs = DebugLaunchInputs::from_request(&request);
+    let mut messages = vec![format!(
+        "Rchadow debug mode selected: {}",
+        inputs.mode.as_str()
+    )];
+    let preflight = run_preflight(&request, &inputs);
 
-    let preflight = validate_hoi4_debug_run(Hoi4DebugRunRequest {
-        game_path: clean_display_path(&game_path),
-        document_path: clean_display_path(&document_path),
-        workspace_mod_path: clean_display_path(&workspace_mod_path),
-        dependencies: request.dependencies.clone(),
-        launch: Some(false),
-    });
-    let base_ready = base_preflight_ready(&preflight.checks);
-
-    if !base_ready {
+    if !base_preflight_ready(&preflight.checks) {
         messages
             .push("Rchadow launch skipped because required preflight checks are red".to_string());
         return Ok(result_without_rchadow(
-            mode,
-            store_path_for_mode(mode, request.store_path.as_deref()),
+            inputs.mode,
+            inputs.store_path,
             preflight.checks,
             messages,
         ));
     }
 
-    let manager = Hoi4PlaysetManager::new(Hoi4Paths {
-        game_user_dir: document_path.clone(),
+    let manager = playset_manager(&request, &inputs);
+    let mods = manager
+        .discover_mods()
+        .map_err(|error| format!("Rchadow failed to discover HOI4 mods: {}", error))?;
+    let expected_mod_names = expected_mod_names(&inputs.workspace_mod_path, &request.dependencies);
+    let selected_mods = selected_mods(&mods, &inputs.workspace_mod_path, &expected_mod_names);
+    let missing_mods = missing_mod_names(&expected_mod_names, &selected_mods);
+    let ready = missing_mods.is_empty();
+    let execution = execute_debug_workflow(
+        &request,
+        &inputs,
+        &manager,
+        &mods,
+        &selected_mods,
+        &missing_mods,
+        &mut messages,
+    )?;
+
+    Ok(debug_launch_result(
+        inputs,
+        preflight.checks,
+        execution,
+        ready,
+        missing_mods,
+        messages,
+    ))
+}
+
+fn debug_launch_result(
+    inputs: DebugLaunchInputs,
+    checks: Vec<Hoi4QualityCheck>,
+    execution: DebugExecution,
+    ready: bool,
+    missing_mods: Vec<String>,
+    messages: Vec<String>,
+) -> RchadowDebugLaunchResult {
+    RchadowDebugLaunchResult {
+        ready,
+        launched: execution.launched,
+        applied_playset: execution.applied_playset,
+        mode: inputs.mode.as_str().to_string(),
+        store_path: inputs.store_path.map(|path| clean_display_path(&path)),
+        exe_args: DEBUG_ARGUMENTS
+            .split_whitespace()
+            .map(ToString::to_string)
+            .collect(),
+        enabled_mods: execution.enabled_mods,
+        missing_mods,
+        dlc_load_path: execution.dlc_load_path,
+        checks,
+        messages,
+    }
+}
+
+impl DebugLaunchInputs {
+    fn from_request(request: &RchadowDebugLaunchRequest) -> Self {
+        let mode = choose_mode(request);
+        Self {
+            game_path: PathBuf::from(clean_input_path(&request.game_path)),
+            document_path: PathBuf::from(clean_input_path(&request.document_path)),
+            workspace_mod_path: PathBuf::from(clean_input_path(&request.workspace_mod_path)),
+            mode,
+            launch: request.launch.unwrap_or(false),
+            apply_playset: request.apply_playset.unwrap_or(true),
+            store_path: store_path_for_mode(mode, request.store_path.as_deref()),
+        }
+    }
+}
+
+fn run_preflight(
+    request: &RchadowDebugLaunchRequest,
+    inputs: &DebugLaunchInputs,
+) -> super::environment::Hoi4DebugRunResult {
+    validate_hoi4_debug_run(Hoi4DebugRunRequest {
+        game_path: clean_display_path(&inputs.game_path),
+        document_path: clean_display_path(&inputs.document_path),
+        workspace_mod_path: clean_display_path(&inputs.workspace_mod_path),
+        dependencies: request.dependencies.clone(),
+        launch: Some(false),
+    })
+}
+
+fn playset_manager(
+    request: &RchadowDebugLaunchRequest,
+    inputs: &DebugLaunchInputs,
+) -> Hoi4PlaysetManager {
+    Hoi4PlaysetManager::new(Hoi4Paths {
+        game_user_dir: inputs.document_path.clone(),
         workshop_dir: request
             .workshop_path
             .as_deref()
             .map(clean_input_path)
             .map(PathBuf::from),
-        game_executable: Some(game_path.join("hoi4.exe")),
-    });
-    let mods = manager
-        .discover_mods()
-        .map_err(|error| format!("Rchadow failed to discover HOI4 mods: {}", error))?;
-    let expected_mod_names = expected_mod_names(&workspace_mod_path, &request.dependencies);
-    let selected_mods = selected_mods(&mods, &workspace_mod_path, &expected_mod_names);
-    let missing_mods = missing_mod_names(&expected_mod_names, &selected_mods);
-    let ready = missing_mods.is_empty();
-    let mut enabled_mods = selected_mods
+        game_executable: Some(inputs.game_path.join("hoi4.exe")),
+    })
+}
+
+fn execute_debug_workflow(
+    request: &RchadowDebugLaunchRequest,
+    inputs: &DebugLaunchInputs,
+    manager: &Hoi4PlaysetManager,
+    mods: &[ModEntry],
+    selected_mods: &[&ModEntry],
+    missing_mods: &[String],
+    messages: &mut Vec<String>,
+) -> Result<DebugExecution, String> {
+    let enabled_mods = selected_mods
         .iter()
         .map(|mod_entry| mod_entry.launcher_path.clone())
         .collect::<Vec<_>>();
-    let mut applied_playset = false;
-    let mut dlc_load_path = None;
-    let store_path = store_path_for_mode(mode, request.store_path.as_deref());
-
-    if ready {
-        let mut playset = debug_playset(&request, &selected_mods);
-        persist_playset_if_needed(
-            mode,
-            store_path.as_deref(),
-            &mut playset,
-            &mods,
-            &mut messages,
-        )?;
-
-        if apply_playset {
-            let applied = manager
-                .apply_playset(&playset, &mods, ApplyPlaysetOptions::default())
-                .map_err(|error| format!("Rchadow failed to apply HOI4 playset: {}", error))?;
-            enabled_mods = applied.enabled_mods;
-            dlc_load_path = Some(clean_display_path(&applied.dlc_load_path));
-            applied_playset = true;
-        }
-
-        if launch {
-            manager
-                .launch(DEBUG_ARGUMENTS)
-                .map_err(|error| format!("Rchadow failed to launch HOI4: {}", error))?;
-            messages.push("hoi4.exe launched through Rchadow".to_string());
-        }
-    } else {
+    if !missing_mods.is_empty() {
         messages.push(format!(
             "Rchadow could not find required mod descriptor(s): {}",
             missing_mods.join(", ")
         ));
+        return Ok(DebugExecution::from_enabled_mods(enabled_mods));
     }
 
-    Ok(RchadowDebugLaunchResult {
-        ready,
-        launched: ready && launch,
-        applied_playset,
-        mode: mode.as_str().to_string(),
-        store_path: store_path.map(|path| clean_display_path(&path)),
-        exe_args: DEBUG_ARGUMENTS
-            .split_whitespace()
-            .map(ToString::to_string)
-            .collect(),
-        enabled_mods,
-        missing_mods,
-        dlc_load_path,
-        checks: preflight.checks,
+    let mut playset = debug_playset(request, selected_mods);
+    persist_playset_if_needed(
+        inputs.mode,
+        inputs.store_path.as_deref(),
+        &mut playset,
+        mods,
         messages,
-    })
+    )?;
+    apply_and_launch_debug(manager, inputs, &playset, mods, enabled_mods, messages)
+}
+
+fn apply_and_launch_debug(
+    manager: &Hoi4PlaysetManager,
+    inputs: &DebugLaunchInputs,
+    playset: &Playset,
+    mods: &[ModEntry],
+    fallback_enabled_mods: Vec<String>,
+    messages: &mut Vec<String>,
+) -> Result<DebugExecution, String> {
+    let mut execution = DebugExecution::from_enabled_mods(fallback_enabled_mods);
+    if inputs.apply_playset {
+        let applied = manager
+            .apply_playset(playset, mods, ApplyPlaysetOptions::default())
+            .map_err(|error| format!("Rchadow failed to apply HOI4 playset: {}", error))?;
+        execution.enabled_mods = applied.enabled_mods;
+        execution.dlc_load_path = Some(clean_display_path(&applied.dlc_load_path));
+        execution.applied_playset = true;
+    }
+
+    if inputs.launch {
+        manager
+            .launch(DEBUG_ARGUMENTS)
+            .map_err(|error| format!("Rchadow failed to launch HOI4: {}", error))?;
+        execution.launched = true;
+        messages.push("hoi4.exe launched through Rchadow".to_string());
+    }
+    Ok(execution)
+}
+
+impl DebugExecution {
+    fn from_enabled_mods(enabled_mods: Vec<String>) -> Self {
+        Self {
+            launched: false,
+            applied_playset: false,
+            enabled_mods,
+            dlc_load_path: None,
+        }
+    }
 }
 
 fn result_without_rchadow(
@@ -267,7 +368,9 @@ fn selected_mods<'a>(
 ) -> Vec<&'a ModEntry> {
     mods.iter()
         .filter(|mod_entry| {
-            expected_mod_names.contains(&mod_entry.title)
+            expected_mod_names
+                .iter()
+                .any(|expected| mod_entry.title.eq_ignore_ascii_case(expected))
                 || paths_point_to_same_location(&mod_entry.content_path, workspace_mod_path)
         })
         .collect()
@@ -429,5 +532,5 @@ fn paths_point_to_same_location(left: &Path, right: &Path) -> bool {
 }
 
 fn clean_input_path(path: &str) -> String {
-    path.trim().trim_matches('"').replace("\\\\", "\\")
+    path.trim().trim_matches('"').to_string()
 }
