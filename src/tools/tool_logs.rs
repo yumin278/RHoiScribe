@@ -101,6 +101,12 @@ struct StoredToolLogIndex {
     page_count: u64,
 }
 
+impl StoredToolLogIndex {
+    fn is_empty(&self) -> bool {
+        self.byte_len == 0 || self.page_count == 0
+    }
+}
+
 pub(crate) fn tool_log_store_path_from_arguments(arguments: &Map<String, Value>) -> Option<String> {
     arguments
         .get("store_path")
@@ -155,31 +161,11 @@ pub fn query_tool_logs(request: ToolLogQueryRequest) -> Result<ToolLogQueryResul
 
 pub fn export_tool_logs(request: ToolLogExportRequest) -> Result<ToolLogExportResult, String> {
     let store_path = preference_store_path(request.store_path.as_deref());
-    let store = open_preference_store(&store_path)?;
-    let entries = read_tool_log_entries(&store)?;
-    let matcher = compile_log_regex(request.pattern.as_deref())?;
     let limit = query_limit(request.limit, MAX_TOOL_LOG_ENTRIES);
-    let (_, entries) = filter_log_entries(&entries, matcher.as_ref(), limit)?;
+    let entries = filtered_tool_log_entries(&store_path, request.pattern.as_deref(), limit)?;
     let output_path = Path::new(&request.output_path);
 
-    if let Some(parent) = output_path
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let payload = json!({
-        "store_path": clean_display_path(&store_path),
-        "backend": "RNMDB single-file page store",
-        "exported_entries": entries.len(),
-        "entries": entries,
-    });
-    fs::write(
-        output_path,
-        serde_json::to_vec_pretty(&payload).map_err(|error| error.to_string())?,
-    )
-    .map_err(|error| error.to_string())?;
+    write_tool_log_export(output_path, tool_log_export_payload(&store_path, &entries))?;
 
     Ok(ToolLogExportResult {
         store_path: clean_display_path(&store_path),
@@ -189,24 +175,87 @@ pub fn export_tool_logs(request: ToolLogExportRequest) -> Result<ToolLogExportRe
     })
 }
 
-fn read_tool_log_entries(store: &RnmdbSingleFilePageStore) -> Result<Vec<ToolLogEntry>, String> {
-    let Some(index_payload) = store.read_payload_page(TOOL_LOG_INDEX_PAGE_ID)? else {
-        return Ok(Vec::new());
-    };
-    let index = decode_length_prefixed_json::<StoredToolLogIndex>(&index_payload)?;
-    if index.byte_len == 0 || index.page_count == 0 {
-        return Ok(Vec::new());
-    }
+fn filtered_tool_log_entries(
+    store_path: &Path,
+    pattern: Option<&str>,
+    limit: usize,
+) -> Result<Vec<ToolLogEntry>, String> {
+    let store = open_preference_store(store_path)?;
+    let entries = read_tool_log_entries(&store)?;
+    let matcher = compile_log_regex(pattern)?;
+    let (_, entries) = filter_log_entries(&entries, matcher.as_ref(), limit)?;
+    Ok(entries)
+}
 
+fn write_tool_log_export(output_path: &Path, payload: Value) -> Result<(), String> {
+    create_output_parent(output_path)?;
+    fs::write(
+        output_path,
+        serde_json::to_vec_pretty(&payload).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn create_output_parent(output_path: &Path) -> Result<(), String> {
+    output_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(fs::create_dir_all)
+        .transpose()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+fn tool_log_export_payload(store_path: &Path, entries: &[ToolLogEntry]) -> Value {
+    json!({
+        "store_path": clean_display_path(store_path),
+        "backend": "RNMDB single-file page store",
+        "exported_entries": entries.len(),
+        "entries": entries,
+    })
+}
+
+fn read_tool_log_entries(store: &RnmdbSingleFilePageStore) -> Result<Vec<ToolLogEntry>, String> {
+    match read_tool_log_index(store)? {
+        Some(index) if !index.is_empty() => {
+            decode_tool_log_entries(read_tool_log_bytes(store, &index)?)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+fn read_tool_log_index(
+    store: &RnmdbSingleFilePageStore,
+) -> Result<Option<StoredToolLogIndex>, String> {
+    store
+        .read_payload_page(TOOL_LOG_INDEX_PAGE_ID)?
+        .map(|payload| decode_length_prefixed_json::<StoredToolLogIndex>(&payload))
+        .transpose()
+}
+
+fn read_tool_log_bytes(
+    store: &RnmdbSingleFilePageStore,
+    index: &StoredToolLogIndex,
+) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::with_capacity(index.byte_len);
     for page_offset in 0..index.page_count {
-        let page_id = TOOL_LOG_DATA_START_PAGE_ID + page_offset;
-        let page = store
-            .read_payload_page(page_id)?
-            .ok_or_else(|| format!("stored tool log page {page_id} is missing"))?;
-        bytes.extend_from_slice(&page);
+        bytes.extend_from_slice(&read_tool_log_page(store, page_offset)?);
     }
     bytes.truncate(index.byte_len);
+    Ok(bytes)
+}
+
+fn read_tool_log_page(
+    store: &RnmdbSingleFilePageStore,
+    page_offset: u64,
+) -> Result<Vec<u8>, String> {
+    let page_id = TOOL_LOG_DATA_START_PAGE_ID + page_offset;
+    store
+        .read_payload_page(page_id)?
+        .ok_or_else(|| format!("stored tool log page {page_id} is missing"))
+}
+
+fn decode_tool_log_entries(bytes: Vec<u8>) -> Result<Vec<ToolLogEntry>, String> {
     serde_json::from_slice(&bytes).map_err(|error| error.to_string())
 }
 
