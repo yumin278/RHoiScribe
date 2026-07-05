@@ -1142,7 +1142,17 @@ fn integer_property(name: &str, description: &str) -> (String, Value) {
 }
 
 fn array_property(name: &str, description: &str) -> (String, Value) {
-    described_property(name, "array", description)
+    (
+        name.to_string(),
+        json!({
+            "type": "array",
+            "description": description,
+            "items": {
+                "type": "object",
+                "additionalProperties": true
+            }
+        }),
+    )
 }
 
 fn bool_property(name: &str, description: &str) -> (String, Value) {
