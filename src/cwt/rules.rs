@@ -44,7 +44,6 @@ mod embedded_hoi4_cwt_config {
     include!(concat!(env!("OUT_DIR"), "/hoi4_cwt_config.rs"));
 }
 
-pub const HOI4_CWT_CONFIG_UPSTREAM_URL: &str = HOI4_CWT_CONFIG.upstream_url;
 pub const HOI4_CWT_CONFIG_REVISION: &str = HOI4_CWT_CONFIG.revision;
 pub const HOI4_CWT_CONFIG_LICENSE: &str = HOI4_CWT_CONFIG.license;
 pub const HOI4_CWT_CONFIG_CONTENT_SHA256: &str =
@@ -419,7 +418,7 @@ fn read_cwt_sources_from_embedded_archive() -> Result<Vec<OwnedCwtSource>, CwtRu
         }
 
         let entry_name = file.name().replace('\\', "/");
-        let Some(relative_path) = github_archive_config_path(&entry_name) else {
+        let Some(relative_path) = HOI4_CWT_CONFIG.archive_source_relative_path(&entry_name) else {
             continue;
         };
         if !relative_path.ends_with(".cwt") {
@@ -446,13 +445,6 @@ fn read_cwt_sources_from_embedded_archive() -> Result<Vec<OwnedCwtSource>, CwtRu
     }
 
     Ok(sources)
-}
-
-fn github_archive_config_path(path: &str) -> Option<&str> {
-    path.strip_prefix("config/").or_else(|| {
-        path.split_once("/config/")
-            .map(|(_, relative_path)| relative_path)
-    })
 }
 
 fn collect_external_cwt_files(

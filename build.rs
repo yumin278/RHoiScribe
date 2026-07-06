@@ -130,7 +130,7 @@ fn fetch_hoi4_cwt_archive(out_dir: &Path, archive_path: &Path) -> io::Result<()>
             "--output".to_string(),
             path_to_string(archive_path),
             HOI4_CWT_CONFIG.revision.to_string(),
-            "config".to_string(),
+            HOI4_CWT_CONFIG.source_directory.to_string(),
         ],
     )
 }
@@ -153,7 +153,7 @@ fn ensure_git_remote(git_dir: &Path) -> io::Result<()> {
                 "remote".to_string(),
                 "set-url".to_string(),
                 "origin".to_string(),
-                HOI4_CWT_CONFIG.git_url.to_string(),
+                HOI4_CWT_CONFIG.git_url(),
             ],
         ),
         _ => run_git_command(
@@ -162,7 +162,7 @@ fn ensure_git_remote(git_dir: &Path) -> io::Result<()> {
                 "remote".to_string(),
                 "add".to_string(),
                 "origin".to_string(),
-                HOI4_CWT_CONFIG.git_url.to_string(),
+                HOI4_CWT_CONFIG.git_url(),
             ],
         ),
     }
@@ -255,7 +255,7 @@ fn inspect_hoi4_cwt_archive(archive_bytes: &[u8]) -> io::Result<CwtArchiveSummar
         }
 
         let entry_name = file.name().replace('\\', "/");
-        let Some(relative_path) = github_archive_config_path(&entry_name) else {
+        let Some(relative_path) = HOI4_CWT_CONFIG.archive_source_relative_path(&entry_name) else {
             continue;
         };
         if !relative_path.ends_with(".cwt") {
@@ -276,7 +276,10 @@ fn inspect_hoi4_cwt_archive(archive_bytes: &[u8]) -> io::Result<CwtArchiveSummar
     if sources.is_empty() {
         return Err(io::Error::new(
             ErrorKind::InvalidData,
-            "CWT config archive contains no config/*.cwt sources",
+            format!(
+                "CWT config archive contains no {}/*.cwt sources",
+                HOI4_CWT_CONFIG.source_directory
+            ),
         ));
     }
 
@@ -285,13 +288,6 @@ fn inspect_hoi4_cwt_archive(archive_bytes: &[u8]) -> io::Result<CwtArchiveSummar
         source_count: sources.len(),
         total_bytes,
         content_sha256: content_sha256(&sources),
-    })
-}
-
-fn github_archive_config_path(path: &str) -> Option<&str> {
-    path.strip_prefix("config/").or_else(|| {
-        path.split_once("/config/")
-            .map(|(_, relative_path)| relative_path)
     })
 }
 

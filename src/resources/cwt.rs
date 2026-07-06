@@ -25,7 +25,6 @@ use crate::cwt::{
     hoi4_config::HOI4_CWT_CONFIG,
     rules::{
         HOI4_CWT_CONFIG_CONTENT_SHA256, HOI4_CWT_CONFIG_SOURCE_COUNT, HOI4_CWT_CONFIG_TOTAL_BYTES,
-        hoi4_cwt_config_archive_url,
     },
 };
 
@@ -106,7 +105,12 @@ pub(crate) fn is_cwt_resource_uri(uri: &str) -> bool {
 
 fn catalog_index_toml() -> String {
     let mut output = String::new();
-    let archive_url = hoi4_cwt_config_archive_url();
+    let source_slug = HOI4_CWT_CONFIG.source_slug();
+    let upstream_url = HOI4_CWT_CONFIG.upstream_url();
+    let git_url = HOI4_CWT_CONFIG.git_url();
+    let archive_url = HOI4_CWT_CONFIG.archive_url();
+    let embedded_source_id = HOI4_CWT_CONFIG.embedded_source_id();
+    let virtual_source_prefix = HOI4_CWT_CONFIG.virtual_source_prefix();
 
     writeln!(
         &mut output,
@@ -120,12 +124,18 @@ fn catalog_index_toml() -> String {
         toml_string(HOI4_CWT_CONFIG.runtime_storage)
     )
     .expect("writing to String cannot fail");
+    writeln!(&mut output, "source_slug = {}", toml_string(&source_slug))
+        .expect("writing to String cannot fail");
     writeln!(
         &mut output,
-        "upstream_url = {}",
-        toml_string(HOI4_CWT_CONFIG.upstream_url)
+        "source_directory = {}",
+        toml_string(HOI4_CWT_CONFIG.source_directory)
     )
     .expect("writing to String cannot fail");
+    writeln!(&mut output, "upstream_url = {}", toml_string(&upstream_url))
+        .expect("writing to String cannot fail");
+    writeln!(&mut output, "git_url = {}", toml_string(&git_url))
+        .expect("writing to String cannot fail");
     writeln!(&mut output, "archive_url = {}", toml_string(&archive_url))
         .expect("writing to String cannot fail");
     writeln!(
@@ -138,6 +148,12 @@ fn catalog_index_toml() -> String {
         &mut output,
         "license = {}",
         toml_string(HOI4_CWT_CONFIG.license)
+    )
+    .expect("writing to String cannot fail");
+    writeln!(
+        &mut output,
+        "embedded_source_id = {}",
+        toml_string(&embedded_source_id)
     )
     .expect("writing to String cannot fail");
     writeln!(
@@ -161,7 +177,7 @@ fn catalog_index_toml() -> String {
     writeln!(
         &mut output,
         "virtual_source_prefix = {}",
-        toml_string(HOI4_CWT_CONFIG.virtual_source_prefix)
+        toml_string(&virtual_source_prefix)
     )
     .expect("writing to String cannot fail");
     writeln!(&mut output, "embedded_rule_files_in_repo = false")
@@ -174,6 +190,10 @@ fn catalog_index_toml() -> String {
 }
 
 fn metadata_markdown() -> String {
+    let upstream_url = HOI4_CWT_CONFIG.upstream_url();
+    let archive_url = HOI4_CWT_CONFIG.archive_url();
+    let virtual_source_prefix = HOI4_CWT_CONFIG.virtual_source_prefix();
+
     format!(
         "# HOI4 CWT config source\n\n\
          - Upstream: {}\n\
@@ -188,15 +208,15 @@ fn metadata_markdown() -> String {
          RHoiScribe embeds the pinned GitHub archive into the compiled binary at build time, \
          decompresses `.cwt` files from static bytes in memory, and reports virtual paths under `{}`. \
          It does not extract, copy, cache, lock, or rewrite these rules on disk.\n",
-        HOI4_CWT_CONFIG.upstream_url,
+        upstream_url,
         HOI4_CWT_CONFIG.revision,
-        hoi4_cwt_config_archive_url(),
+        archive_url,
         HOI4_CWT_CONFIG.license,
         HOI4_CWT_CONFIG_SOURCE_COUNT,
         HOI4_CWT_CONFIG_TOTAL_BYTES,
         HOI4_CWT_CONFIG_CONTENT_SHA256,
         HOI4_CWT_CONFIG.runtime_storage,
-        HOI4_CWT_CONFIG.virtual_source_prefix,
+        virtual_source_prefix,
     )
 }
 
