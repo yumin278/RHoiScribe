@@ -295,7 +295,7 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "validate_hoi4_project",
         title: "Validate HOI4 project",
-        description: "Run red/yellow/green static checks over indexed HOI4 roots for duplicate definitions, brace balance, unclosed blocks, missing GFX textures or sprites, localisation references, structural definitions, and replace_path risks.",
+        description: "Run default hybrid CWT plus legacy red/yellow/green checks over indexed HOI4 roots for schema errors, parse errors, duplicate definitions, missing assets/localisation, structural references, and replace_path risks. Use validation_mode=legacy for legacy-only checks.",
         required: &["roots"],
         handler: call_validate_hoi4_project,
     },

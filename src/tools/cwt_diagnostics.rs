@@ -20,6 +20,7 @@
 //------------------------------------------------------------------------------------
 
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -163,11 +164,11 @@ pub fn should_skip_tool_log(name: &str, arguments: &serde_json::Value) -> bool {
         return false;
     }
 
-    arguments
+    !arguments
         .as_object()
         .and_then(|arguments| arguments.get("validation_mode"))
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|mode| !matches!(mode, "legacy" | "legacy_only" | "legacy-only"))
+        .is_some_and(|mode| matches!(mode, "legacy" | "legacy_only" | "legacy-only"))
 }
 
 pub fn open_language_workspace(
@@ -455,11 +456,11 @@ fn parse_workspace_mode(mode: Option<&str>) -> Result<CwtWorkspaceMode, ToolErro
 
 fn validation_mode(mode: Option<&str>) -> Result<ProjectValidationMode, ToolError> {
     match mode.map(str::to_ascii_lowercase).as_deref() {
-        None | Some("legacy") | Some("legacy_only") | Some("legacy-only") => {
+        Some("legacy") | Some("legacy_only") | Some("legacy-only") => {
             Ok(ProjectValidationMode::Legacy)
         }
         Some("cwt") | Some("cwt_only") | Some("cwt-only") => Ok(ProjectValidationMode::Cwt),
-        Some("hybrid") | Some("cwt_legacy") | Some("cwt+legacy") => {
+        None | Some("hybrid") | Some("cwt_legacy") | Some("cwt+legacy") => {
             Ok(ProjectValidationMode::Hybrid)
         }
         Some(other) => Err(ToolError::InvalidRequest(format!(
@@ -689,6 +690,16 @@ fn merge_project_validation(
     mut legacy: ProjectValidationResult,
     cwt: ProjectValidationResult,
 ) -> ProjectValidationResult {
+    let cwt_parse_paths = cwt
+        .checks
+        .iter()
+        .filter(|check| check.id == "cwt_parse_error")
+        .map(|check| check.path.clone())
+        .collect::<BTreeSet<_>>();
+    legacy.checks.retain(|check| {
+        !(cwt_parse_paths.contains(&check.path)
+            && matches!(check.id.as_str(), "brace_balance" | "unclosed_block"))
+    });
     legacy.checks.extend(cwt.checks);
     sort_project_checks(&mut legacy.checks);
     legacy.status = project_status(&legacy.checks);
