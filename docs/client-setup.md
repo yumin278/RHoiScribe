@@ -66,6 +66,8 @@ Direct Skill commands return JSON and expose the same prompts, resources, and to
 ./rhoiscribe-linux-x86_64 --skill call-tool "search_hoi4_knowledge" '{"query":"on_actions ROOT FROM"}'
 ```
 
+MCP server mode keeps CWT language workspaces warm in process memory across tool calls. Direct `--skill` calls expose the same tools and resources, but each command is a short-lived process, so warm CWT state is rebuilt per command instead of reused.
+
 Expected binary paths:
 
 - Prebuilt Windows: `<ABSOLUTE_PATH_TO_RHOISCRIBE>\rhoiscribe-windows-x86_64.exe`
@@ -162,10 +164,17 @@ Windows clients usually need the `.exe` path and escaped backslashes in JSON:
 - Network: no runtime network access is required.
 - Prompts: available through `prompts/list` and `prompts/get`.
 - Resources: available through `resources/list` and `resources/read`.
+- CWT resources: `rhoiscribe://hoi4/cwt/catalog` and `rhoiscribe://hoi4/cwt/metadata` describe the pinned NS9927/cwtools-hoi4-config snapshot, revision, hash, virtual source prefix, and no-runtime-disk policy.
 - Tools: available through `tools/list` and `tools/call`.
+- CWT memory policy: embedded CWT rules are loaded from compiled binary bytes into process memory. RHoiScribe does not extract rule files, create CWT caches, create CWT lock files, or store CWT language state in RNMDB. CWT language tools also skip RHoiScribe tool-call logging so CWT diagnostics and workspace language state are not written to the `.rhoiscribe` log store.
+- CWT workspace: call `open_hoi4_language_workspace` with the current mod root early in MCP sessions, then poll `get_hoi4_language_status` until the workspace is warm. Reopen the workspace when the mod root, rules override, vanilla root, ignore globs, or language configuration changes.
+- CWT diagnostics: `validate_hoi4_project` defaults to hybrid CWT plus legacy checks. Use `validation_mode = "legacy"` for legacy-only behavior, `validation_mode = "cwt"` for CWT-only behavior, or `validation_mode = "hybrid"` explicitly when you want both.
+- CWT file checks: `validate_hoi4_file` validates one saved file or unsaved content with embedded rules and an optional resident workspace handle.
+- CWT language intelligence: use `explain_hoi4_diagnostic`, `list_hoi4_workspace_symbols`, `find_hoi4_definition`, `find_hoi4_references`, `suggest_hoi4_completion`, `inspect_hoi4_scope`, and `inspect_hoi4_type_rule` for model-facing explanations, locations, completions, scope context, and applicable rule profiles.
+- CWT localisation generation: `generate_missing_localisation` returns reviewable dry-run localisation candidates and generated file content. It never writes files; use `generate_localisation_batch` with the returned entries only after write approval.
 - Write mode: generation tools require `dry_run = false` and `output_root = "<MOD_OUTPUT_ROOT>"`.
 - Project index: `index_hoi4_project` returns structured definitions, references, and files for a mod root and optional game roots.
-- Project validation: `validate_hoi4_project` returns red/yellow/green static checks for duplicate IDs, brace balance, missing GUI/GFX/localisation links, and `replace_path` risks.
+- Project validation: `validate_hoi4_project` returns red/yellow/green static checks for CWT schema diagnostics, duplicate IDs, brace balance where CWT parse diagnostics are not available, missing GUI/GFX/localisation links, and `replace_path` risks.
 - Repair checks: `repair_hoi4_project` can dry-run or apply UTF-8 BOM rules, Paradox script formatting, and audio checks. If ffmpeg is missing, dry-run returns guidance; after user approval, `dry_run=false` with `install_ffmpeg=true` allows a silent installation attempt.
 - Existing-file edits: `edit_hoi4_script_file` replaces or inserts named blocks in an existing HOI4 script file with dry-run preview and brace checks. Pass `workspace_root` for the current mod or workspace so the target file is restricted to that tree.
 - Experimental assets: `generate_gui_gfx_asset` can create local procedural PNG files, `.gfx` sprite registration, and optional `.gui` files without external image models. Writing requires `approved=true`.
@@ -198,6 +207,8 @@ rhoiscribe://hoi4/knowledge/catalog
 Then call `generate_localisation_batch` with `dry_run = true` before allowing write mode. The returned file path should stay under a valid `localisation/<language>/` tree, including nested subdirectories when they match the user's mod. Filenames use the usual `_l_<language>.yml` suffix, and the encoding should be `utf-8-bom`.
 
 For project-level checks, call `index_hoi4_project`, then `validate_hoi4_project`, then `repair_hoi4_project` with `dry_run = true`. Only use repair apply mode after reviewing the returned changes.
+
+For CWT-backed language support, call `open_hoi4_language_workspace` as soon as the mod root is known, then `get_hoi4_language_status`. Use `validate_hoi4_project` in its default hybrid mode before finishing file-changing work. When validation reports missing localisation, call `generate_missing_localisation` first and review the returned dry-run file before using `generate_localisation_batch` to write approved entries.
 
 For experimental asset generation, call `generate_gui_gfx_asset` with `dry_run = true` first. Set `approved=true` only after the user agrees to create new procedural GUI/GFX assets instead of reusing existing project art.
 

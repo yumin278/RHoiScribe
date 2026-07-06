@@ -68,6 +68,7 @@ RHoiScribe gives agents a local HOI4 knowledge layer, reusable prompts, and file
 At a high level, it helps agents with:
 
 - project structure and reference awareness before broad edits
+- resident in-memory CWT language checks, symbols, references, completions, and localisation assistance
 - red/yellow/green checks for load-risk issues before delivery
 - fast encoding, formatting, and media convention checks
 - safe edits to existing files while respecting workspace conventions
@@ -75,6 +76,8 @@ At a high level, it helps agents with:
 - RNMDB-backed cross-IDE agent state under `.rhoiscribe`
 - tool-call audit logs with regex-filtered export from the same state database
 - experimental GUI/GFX asset creation when the user approves new procedural art
+
+CWT language support uses a bundled upstream rules snapshot in process memory. It does not require runtime network access and does not extract CWT rules, indexes, diagnostics, or language-service caches to disk.
 
 The bundled Skill package is the quickest way to give compatible agents local access without editing MCP configuration. For complete functionality and a smoother experience, use the MCP server when your agent supports it.
 

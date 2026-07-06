@@ -68,6 +68,7 @@ RHoiScribe は agents にローカル HOI4 knowledge layer、reusable prompts、
 大まかには、agents の次の作業を支援します。
 
 - 大きな編集の前に project structure と references を把握する
+- process memory に常駐する CWT language checks、symbols、references、completions、localisation assistance
 - delivery 前に load-risk issues を red/yellow/green で確認する
 - encoding、formatting、media conventions を素早く確認する
 - workspace conventions を尊重しながら existing files を安全に編集する
@@ -75,6 +76,8 @@ RHoiScribe は agents にローカル HOI4 knowledge layer、reusable prompts、
 - RNMDB-backed `.rhoiscribe` による cross-IDE agent state
 - 同じ state database からの tool-call audit logs と regex-filtered export
 - user approval 後に experimental GUI/GFX procedural assets を作成する
+
+CWT language support は binary に bundled された upstream rules snapshot を使い、process memory 内で動作します。runtime network は不要で、CWT rules、indexes、diagnostics、language-service caches を disk へ展開、抽出、書き込みしません。
 
 Skill package は、MCP configuration を編集せずに compatible agent へローカル機能を渡す最短の方法です。agent が MCP をサポートする場合は、完全な機能とより滑らかな体験のために MCP server を使ってください。
 

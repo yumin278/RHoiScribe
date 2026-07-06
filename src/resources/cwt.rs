@@ -207,7 +207,19 @@ fn metadata_markdown() -> String {
          - Embedded RHoiScribe rule files: none\n\n\
          RHoiScribe embeds the pinned GitHub archive into the compiled binary at build time, \
          decompresses `.cwt` files from static bytes in memory, and reports virtual paths under `{}`. \
-         It does not extract, copy, cache, lock, or rewrite these rules on disk.\n",
+         It does not extract, copy, cache, lock, or rewrite these rules on disk.\n\n\
+         ## Runtime language support\n\n\
+         Use `open_hoi4_language_workspace` early in MCP sessions, then poll \
+         `get_hoi4_language_status` until the workspace is warm. Project validation defaults to \
+         hybrid CWT plus legacy checks through `validate_hoi4_project`; pass \
+         `validation_mode = \"legacy\"` only when legacy-only behavior is required. Use \
+         `validate_hoi4_file`, `explain_hoi4_diagnostic`, symbol/definition/reference/completion \
+         tools, `inspect_hoi4_scope`, and `inspect_hoi4_type_rule` for model-facing language \
+         support. Use `generate_missing_localisation` for reviewable dry-run localisation \
+         candidates, then write approved entries through `generate_localisation_batch`.\n\n\
+         CWT rules, diagnostics, workspace snapshots, symbols, completions, and localisation \
+         candidates stay in process memory. CWT language tools skip RNMDB tool-call logging so \
+         CWT analysis state is not written to the `.rhoiscribe` log store.\n",
         upstream_url,
         HOI4_CWT_CONFIG.revision,
         archive_url,
