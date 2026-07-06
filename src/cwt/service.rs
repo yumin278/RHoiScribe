@@ -36,9 +36,28 @@ pub struct CwtLanguageService {
     workspaces: RwLock<HashMap<String, Arc<CwtWorkspaceHandle>>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CwtMemoryActionReport {
+    pub action: CwtMemoryAction,
+    pub handle_id: Option<String>,
+    pub affected_workspace_count: usize,
+    pub status: Option<CwtWorkspaceStatus>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CwtMemoryAction {
+    ReloadRules,
+    RefreshWorkspace,
+    ClearWorkspace,
+    ClearAll,
+    RebuildVanilla,
+}
+
 #[derive(Debug)]
 pub enum CwtLanguageServiceError {
     RegistryLockPoisoned,
+    UnknownWorkspace(String),
     Workspace(CwtWorkspaceError),
 }
 
@@ -101,6 +120,96 @@ impl CwtLanguageService {
         workspaces.clear();
         Ok(cleared)
     }
+
+    pub fn reload_workspace_rules(
+        &self,
+        handle_id: &str,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        self.refresh_handle(handle_id, CwtMemoryAction::ReloadRules)
+    }
+
+    pub fn refresh_workspace(
+        &self,
+        handle_id: &str,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        self.refresh_handle(handle_id, CwtMemoryAction::RefreshWorkspace)
+    }
+
+    pub fn rebuild_vanilla_memory(
+        &self,
+        handle_id: &str,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        self.refresh_handle(handle_id, CwtMemoryAction::RebuildVanilla)
+    }
+
+    pub fn clear_workspace(
+        &self,
+        handle_id: &str,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        let removed = {
+            let mut workspaces = self
+                .workspaces
+                .write()
+                .map_err(|_| CwtLanguageServiceError::RegistryLockPoisoned)?;
+            workspaces.remove(handle_id).is_some()
+        };
+
+        if !removed {
+            return Err(CwtLanguageServiceError::UnknownWorkspace(
+                handle_id.to_string(),
+            ));
+        }
+
+        Ok(CwtMemoryActionReport {
+            action: CwtMemoryAction::ClearWorkspace,
+            handle_id: Some(handle_id.to_string()),
+            affected_workspace_count: 1,
+            status: None,
+            message: "cleared CWT workspace memory".to_string(),
+        })
+    }
+
+    pub fn clear_all_workspace_memory(
+        &self,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        let affected_workspace_count = self.clear()?;
+        Ok(CwtMemoryActionReport {
+            action: CwtMemoryAction::ClearAll,
+            handle_id: None,
+            affected_workspace_count,
+            status: None,
+            message: "cleared all CWT workspace memory".to_string(),
+        })
+    }
+
+    fn refresh_handle(
+        &self,
+        handle_id: &str,
+        action: CwtMemoryAction,
+    ) -> Result<CwtMemoryActionReport, CwtLanguageServiceError> {
+        let handle = self.workspace_or_error(handle_id)?;
+        handle
+            .refresh()
+            .map_err(CwtLanguageServiceError::Workspace)?;
+        let status = handle
+            .status()
+            .map_err(CwtLanguageServiceError::Workspace)?;
+        Ok(CwtMemoryActionReport {
+            action,
+            handle_id: Some(handle_id.to_string()),
+            affected_workspace_count: 1,
+            status: Some(status),
+            message: "scheduled CWT workspace warm refresh".to_string(),
+        })
+    }
+
+    fn workspace_or_error(
+        &self,
+        handle_id: &str,
+    ) -> Result<Arc<CwtWorkspaceHandle>, CwtLanguageServiceError> {
+        self.get_workspace(handle_id)?
+            .ok_or_else(|| CwtLanguageServiceError::UnknownWorkspace(handle_id.to_string()))
+    }
 }
 
 impl fmt::Debug for CwtLanguageService {
@@ -120,6 +229,9 @@ impl fmt::Display for CwtLanguageServiceError {
                     formatter,
                     "CWT language workspace registry lock is poisoned"
                 )
+            }
+            CwtLanguageServiceError::UnknownWorkspace(handle_id) => {
+                write!(formatter, "unknown CWT workspace `{}`", handle_id)
             }
             CwtLanguageServiceError::Workspace(error) => write!(formatter, "{error}"),
         }
