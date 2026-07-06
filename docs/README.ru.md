@@ -89,6 +89,9 @@ Skill package — самый быстрый способ дать совмест
 - Linux: `rhoiscribe-linux-x86_64`
 - macOS: `rhoiscribe-macos-universal`
 
+> [!WARNING]
+> Skill package пока остается доступным, но для новой языковой поддержки это уже не рекомендуемый путь. Ей нужен долгоживущий процесс, который остается прогретым; Skill запускается короткими вызовами, поэтому поддержка Skill будет постепенно сворачиваться. Если клиент умеет работать с MCP server, лучше использовать его.
+
 Если ваш agent умеет читать Skill folder, скачайте Skill package для своей платформы:
 
 - Windows: `rhoiscribe-skill-windows-x86_64.zip`

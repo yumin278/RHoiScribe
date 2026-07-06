@@ -89,6 +89,9 @@ Skill package は、MCP configuration を編集せずに compatible agent へロ
 - Linux: `rhoiscribe-linux-x86_64`
 - macOS: `rhoiscribe-macos-universal`
 
+> [!WARNING]
+> Skill package は当面残しますが、新しい language support の推奨経路ではなくなります。この機能は温まったまま動く長時間の process と相性がよく、短い呼び出しで終わる Skill には向きません。Skill support は今後段階的に縮小します。client が MCP server を使える場合は、そちらを優先してください。
+
 agent が Skill folder を読める場合は、対応する Skill package も使えます。
 
 - Windows: `rhoiscribe-skill-windows-x86_64.zip`

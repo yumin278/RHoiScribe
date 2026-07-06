@@ -89,6 +89,9 @@ Download a prebuilt binary from [GitHub Releases](https://github.com/czxieddan/R
 - Linux: `rhoiscribe-linux-x86_64`
 - macOS: `rhoiscribe-macos-universal`
 
+> [!WARNING]
+> The Skill package is still available for now, but it is no longer the recommended path for new language support. That support works best in a long-lived process that can stay warm; Skill runs as short-lived calls, so Skill support will be phased out gradually. Use the MCP server when your client can.
+
 For agents that can read a Skill folder, download the matching Skill package:
 
 - Windows: `rhoiscribe-skill-windows-x86_64.zip`
