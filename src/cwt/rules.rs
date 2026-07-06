@@ -19,7 +19,12 @@
 // https://github.com/czxieddan/RHoiScribe
 //------------------------------------------------------------------------------------
 
-use std::{error::Error, fmt, path::PathBuf};
+use std::{
+    error::Error,
+    fmt, fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use cwtools_parser::{ast::ParseError, parser::parse_string};
 use cwtools_rules::{
@@ -36,6 +41,12 @@ use cwtools_validation::{ValidationError, validate_ast};
 pub struct VirtualCwtSource<'a> {
     pub path: &'a str,
     pub content: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedCwtSource {
+    pub path: String,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,12 +69,36 @@ pub struct CwtValidationDiagnostic {
 
 #[derive(Debug)]
 pub enum CwtRuleLoadError {
+    NoRuleSources {
+        source: String,
+    },
+    ExternalRead {
+        path: String,
+        message: String,
+    },
     ScriptParse {
         path: String,
         line: u32,
         column: u16,
         message: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CwtRuleReloadFailure {
+    pub generation: u64,
+    pub message: String,
+    pub kept_previous_good: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CwtRuleReloadReport {
+    pub generation: u64,
+    pub active_changed: bool,
+    pub kept_previous_good: bool,
+    pub active_source_count: Option<usize>,
+    pub rule_diagnostic_count: Option<usize>,
+    pub error: Option<String>,
 }
 
 pub struct LoadedCwtRules {
@@ -73,9 +108,74 @@ pub struct LoadedCwtRules {
     rule_diagnostics: Vec<CwtRuleDiagnostic>,
 }
 
+#[derive(Default)]
+pub struct ReloadableCwtRules {
+    generation: u64,
+    active: Option<Arc<LoadedCwtRules>>,
+    last_failure: Option<CwtRuleReloadFailure>,
+}
+
+impl OwnedCwtSource {
+    fn as_virtual(&self) -> VirtualCwtSource<'_> {
+        VirtualCwtSource {
+            path: &self.path,
+            content: &self.content,
+        }
+    }
+}
+
+pub fn load_bundled_cwt_rules() -> Result<LoadedCwtRules, CwtRuleLoadError> {
+    let bundled_sources = crate::resources::embedded_hoi4_cwt_sources()
+        .filter(|source| source.is_rule_source())
+        .collect::<Vec<_>>();
+
+    if bundled_sources.is_empty() {
+        return Err(CwtRuleLoadError::NoRuleSources {
+            source: "embedded HOI4 CWT bundle".to_string(),
+        });
+    }
+
+    let virtual_paths = bundled_sources
+        .iter()
+        .map(|source| source.virtual_path())
+        .collect::<Vec<_>>();
+    let sources = bundled_sources
+        .iter()
+        .zip(&virtual_paths)
+        .map(|(source, path)| VirtualCwtSource {
+            path,
+            content: source.content,
+        })
+        .collect::<Vec<_>>();
+
+    load_virtual_cwt_rules(&sources)
+}
+
+pub fn load_owned_cwt_rules(
+    sources: &[OwnedCwtSource],
+) -> Result<LoadedCwtRules, CwtRuleLoadError> {
+    if sources.is_empty() {
+        return Err(CwtRuleLoadError::NoRuleSources {
+            source: "owned CWT source list".to_string(),
+        });
+    }
+
+    let sources = sources
+        .iter()
+        .map(OwnedCwtSource::as_virtual)
+        .collect::<Vec<_>>();
+    load_virtual_cwt_rules(&sources)
+}
+
 pub fn load_virtual_cwt_rules(
     sources: &[VirtualCwtSource<'_>],
 ) -> Result<LoadedCwtRules, CwtRuleLoadError> {
+    if sources.is_empty() {
+        return Err(CwtRuleLoadError::NoRuleSources {
+            source: "virtual CWT source list".to_string(),
+        });
+    }
+
     let table = StringTable::new();
     let mut ruleset = RuleSet::new();
     let mut parsed_sources = Vec::new();
@@ -112,6 +212,48 @@ pub fn load_virtual_cwt_rules(
     })
 }
 
+pub fn read_external_cwt_sources(
+    path: impl AsRef<Path>,
+) -> Result<Vec<OwnedCwtSource>, CwtRuleLoadError> {
+    let path = path.as_ref();
+    let mut files = Vec::new();
+
+    if path.is_file() {
+        if is_cwt_file(path) {
+            files.push(path.to_path_buf());
+        }
+    } else {
+        collect_external_cwt_files(path, &mut files)?;
+    }
+
+    files.sort();
+    if files.is_empty() {
+        return Err(CwtRuleLoadError::NoRuleSources {
+            source: path_to_string(path),
+        });
+    }
+
+    files
+        .into_iter()
+        .map(|path| {
+            fs::read_to_string(&path)
+                .map(|content| OwnedCwtSource {
+                    path: path_to_string(&path),
+                    content,
+                })
+                .map_err(|error| CwtRuleLoadError::ExternalRead {
+                    path: path_to_string(&path),
+                    message: error.to_string(),
+                })
+        })
+        .collect()
+}
+
+pub fn load_external_cwt_rules(path: impl AsRef<Path>) -> Result<LoadedCwtRules, CwtRuleLoadError> {
+    let sources = read_external_cwt_sources(path)?;
+    load_owned_cwt_rules(&sources)
+}
+
 impl LoadedCwtRules {
     pub fn source_count(&self) -> usize {
         self.source_count
@@ -137,9 +279,97 @@ impl LoadedCwtRules {
     }
 }
 
+impl ReloadableCwtRules {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn active(&self) -> Option<Arc<LoadedCwtRules>> {
+        self.active.clone()
+    }
+
+    pub fn last_failure(&self) -> Option<&CwtRuleReloadFailure> {
+        self.last_failure.as_ref()
+    }
+
+    pub fn reload_bundled(&mut self) -> CwtRuleReloadReport {
+        self.apply_reload_result(load_bundled_cwt_rules())
+    }
+
+    pub fn reload_virtual(&mut self, sources: &[VirtualCwtSource<'_>]) -> CwtRuleReloadReport {
+        self.apply_reload_result(load_virtual_cwt_rules(sources))
+    }
+
+    pub fn reload_owned(&mut self, sources: &[OwnedCwtSource]) -> CwtRuleReloadReport {
+        self.apply_reload_result(load_owned_cwt_rules(sources))
+    }
+
+    pub fn reload_external_path(&mut self, path: impl AsRef<Path>) -> CwtRuleReloadReport {
+        self.apply_reload_result(load_external_cwt_rules(path))
+    }
+
+    fn apply_reload_result(
+        &mut self,
+        result: Result<LoadedCwtRules, CwtRuleLoadError>,
+    ) -> CwtRuleReloadReport {
+        self.generation += 1;
+
+        match result {
+            Ok(loaded) => {
+                let source_count = loaded.source_count();
+                let rule_diagnostic_count = loaded.rule_diagnostics().len();
+                self.active = Some(Arc::new(loaded));
+                self.last_failure = None;
+                CwtRuleReloadReport {
+                    generation: self.generation,
+                    active_changed: true,
+                    kept_previous_good: false,
+                    active_source_count: Some(source_count),
+                    rule_diagnostic_count: Some(rule_diagnostic_count),
+                    error: None,
+                }
+            }
+            Err(error) => {
+                let kept_previous_good = self.active.is_some();
+                let message = error.to_string();
+                self.last_failure = Some(CwtRuleReloadFailure {
+                    generation: self.generation,
+                    message: message.clone(),
+                    kept_previous_good,
+                });
+                CwtRuleReloadReport {
+                    generation: self.generation,
+                    active_changed: false,
+                    kept_previous_good,
+                    active_source_count: self.active.as_ref().map(|rules| rules.source_count()),
+                    rule_diagnostic_count: self
+                        .active
+                        .as_ref()
+                        .map(|rules| rules.rule_diagnostics().len()),
+                    error: Some(message),
+                }
+            }
+        }
+    }
+}
+
 impl fmt::Display for CwtRuleLoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            CwtRuleLoadError::NoRuleSources { source } => {
+                write!(formatter, "no CWT rule sources found in `{}`", source)
+            }
+            CwtRuleLoadError::ExternalRead { path, message } => {
+                write!(
+                    formatter,
+                    "failed to read CWT source `{}`: {}",
+                    path, message
+                )
+            }
             CwtRuleLoadError::ScriptParse {
                 path,
                 line,
@@ -155,6 +385,48 @@ impl fmt::Display for CwtRuleLoadError {
 }
 
 impl Error for CwtRuleLoadError {}
+
+fn collect_external_cwt_files(
+    directory: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), CwtRuleLoadError> {
+    let entries = fs::read_dir(directory).map_err(|error| CwtRuleLoadError::ExternalRead {
+        path: path_to_string(directory),
+        message: error.to_string(),
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|error| CwtRuleLoadError::ExternalRead {
+            path: path_to_string(directory),
+            message: error.to_string(),
+        })?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|error| CwtRuleLoadError::ExternalRead {
+                path: path_to_string(&path),
+                message: error.to_string(),
+            })?;
+
+        if file_type.is_dir() {
+            collect_external_cwt_files(&path, files)?;
+        } else if file_type.is_file() && is_cwt_file(&path) {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn is_cwt_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("cwt"))
+}
+
+fn path_to_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
 
 fn parse_folders_list(content: &str) -> Vec<String> {
     content
