@@ -19,7 +19,7 @@
 // https://github.com/czxieddan/RHoiScribe
 //------------------------------------------------------------------------------------
 
-use std::{future, future::Future};
+use std::{future, future::Future, sync::Arc};
 
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
@@ -33,7 +33,9 @@ use rmcp::{
     transport::stdio,
 };
 
-use crate::{prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatalog};
+use crate::{
+    RhoiScribeRuntime, prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatalog,
+};
 
 pub const SERVER_NAME: &str = "rhoiscribe";
 pub const SERVER_TITLE: &str = "RHoiScribe";
@@ -47,12 +49,22 @@ pub struct ServerMetadata {
     pub instructions: &'static str,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct RhoiScribeServer;
+#[derive(Debug, Clone)]
+pub struct RhoiScribeServer {
+    runtime: Arc<RhoiScribeRuntime>,
+}
 
 impl RhoiScribeServer {
     pub fn new() -> Self {
-        Self
+        Self::with_runtime(Arc::new(RhoiScribeRuntime::new()))
+    }
+
+    pub fn with_runtime(runtime: Arc<RhoiScribeRuntime>) -> Self {
+        Self { runtime }
+    }
+
+    pub fn runtime(&self) -> Arc<RhoiScribeRuntime> {
+        Arc::clone(&self.runtime)
     }
 
     pub fn metadata(&self) -> ServerMetadata {
@@ -157,9 +169,15 @@ impl ServerHandler for RhoiScribeServer {
         let arguments = request.arguments.unwrap_or_default();
         future::ready(
             ToolCatalog::builtin()
-                .call(&request.name, arguments)
+                .call_with_runtime(self.runtime(), &request.name, arguments)
                 .map_err(|error| McpError::invalid_params(error.to_string(), None)),
         )
+    }
+}
+
+impl Default for RhoiScribeServer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -37,13 +37,16 @@ mod script_edit;
 mod tool_logs;
 mod unique_scan;
 
-use std::{borrow::Cow, error::Error, fmt, fs, path::Path};
+use std::{borrow::Cow, error::Error, fmt, fs, path::Path, sync::Arc};
 
 use rmcp::model::{CallToolResult, JsonObject, Tool, ToolAnnotations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use crate::resources::{KNOWLEDGE_TOPIC_URI_PREFIX, KnowledgeCatalog};
+use crate::{
+    RhoiScribeRuntime,
+    resources::{KNOWLEDGE_TOPIC_URI_PREFIX, KnowledgeCatalog},
+};
 
 pub use environment::{
     DiscoverHoi4EnvironmentRequest, Hoi4DebugRunRequest, Hoi4DebugRunResult, Hoi4EnvironmentResult,
@@ -464,6 +467,11 @@ pub struct ToolCatalog {
     tools: &'static [ToolSpec],
 }
 
+#[derive(Debug, Clone)]
+pub struct ToolContext {
+    runtime: Arc<RhoiScribeRuntime>,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ToolSpec {
     name: &'static str,
@@ -473,7 +481,7 @@ struct ToolSpec {
     handler: ToolHandler,
 }
 
-type ToolHandler = fn(JsonObject) -> Result<CallToolResult, ToolError>;
+type ToolHandler = fn(&ToolContext, JsonObject) -> Result<CallToolResult, ToolError>;
 
 #[derive(Debug)]
 pub enum ToolError {
@@ -494,6 +502,16 @@ fn map_state_database_error(message: String) -> ToolError {
 
 pub struct ToolEngine;
 
+impl ToolContext {
+    pub fn new(runtime: Arc<RhoiScribeRuntime>) -> Self {
+        Self { runtime }
+    }
+
+    pub fn runtime(&self) -> Arc<RhoiScribeRuntime> {
+        Arc::clone(&self.runtime)
+    }
+}
+
 impl ToolCatalog {
     pub fn builtin() -> Self {
         Self { tools: TOOL_SPECS }
@@ -508,8 +526,18 @@ impl ToolCatalog {
     }
 
     pub fn call(&self, name: &str, arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+        self.call_with_runtime(Arc::new(RhoiScribeRuntime::new()), name, arguments)
+    }
+
+    pub fn call_with_runtime(
+        &self,
+        runtime: Arc<RhoiScribeRuntime>,
+        name: &str,
+        arguments: JsonObject,
+    ) -> Result<CallToolResult, ToolError> {
+        let context = ToolContext::new(runtime);
         let arguments_for_log = Value::Object(arguments.clone());
-        let result = self.call_without_logging(name, arguments);
+        let result = self.call_without_logging(&context, name, arguments);
         match self.record_tool_log(name, arguments_for_log, &result) {
             Ok(()) => result,
             Err(log_error) => match result {
@@ -524,6 +552,7 @@ impl ToolCatalog {
 
     fn call_without_logging(
         &self,
+        context: &ToolContext,
         name: &str,
         arguments: JsonObject,
     ) -> Result<CallToolResult, ToolError> {
@@ -532,7 +561,7 @@ impl ToolCatalog {
             .iter()
             .find(|tool| tool.name == name)
             .ok_or_else(|| ToolError::UnknownTool(name.to_string()))?;
-        (tool.handler)(arguments)
+        (tool.handler)(context, arguments)
     }
 
     fn record_tool_log(
@@ -870,149 +899,218 @@ fn tool_log_outcome(
     }
 }
 
-fn call_generate_localisation_batch(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_generate_localisation_batch(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<LocalisationBatchRequest>(arguments)?;
     Ok(structured_result(ToolEngine::generate_localisation_batch(
         request,
     )?))
 }
 
-fn call_generate_focus_batch(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_generate_focus_batch(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<FocusBatchRequest>(arguments)?;
     Ok(structured_result(ToolEngine::generate_focus_batch(
         request,
     )?))
 }
 
-fn call_generate_event_batch(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_generate_event_batch(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<EventBatchRequest>(arguments)?;
     Ok(structured_result(ToolEngine::generate_event_batch(
         request,
     )?))
 }
 
-fn call_generate_decision_batch(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_generate_decision_batch(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<DecisionBatchRequest>(arguments)?;
     Ok(structured_result(ToolEngine::generate_decision_batch(
         request,
     )?))
 }
 
-fn call_search_hoi4_knowledge(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_search_hoi4_knowledge(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<SearchHoi4KnowledgeRequest>(arguments)?;
     Ok(structured_result(ToolEngine::search_hoi4_knowledge(
         request,
     )?))
 }
 
-fn call_scan_unique_identifiers(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_scan_unique_identifiers(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<UniqueIdentifierScanRequest>(arguments)?;
     Ok(structured_result(ToolEngine::scan_unique_identifiers(
         request,
     )?))
 }
 
-fn call_discover_hoi4_environment(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_discover_hoi4_environment(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<DiscoverHoi4EnvironmentRequest>(arguments)?;
     Ok(structured_result(ToolEngine::discover_hoi4_environment(
         request,
     )?))
 }
 
-fn call_validate_hoi4_debug_run(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_validate_hoi4_debug_run(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<Hoi4DebugRunRequest>(arguments)?;
     Ok(structured_result(ToolEngine::validate_hoi4_debug_run(
         request,
     )))
 }
 
-fn call_launch_hoi4_debug_with_rchadow(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_launch_hoi4_debug_with_rchadow(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<RchadowDebugLaunchRequest>(arguments)?;
     Ok(structured_result(
         ToolEngine::launch_hoi4_debug_with_rchadow(request)?,
     ))
 }
 
-fn call_classify_error_log(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_classify_error_log(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ClassifyErrorLogRequest>(arguments)?;
     Ok(structured_result(ToolEngine::classify_error_log(request)?))
 }
 
-fn call_list_agent_preferences(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_list_agent_preferences(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ListAgentPreferencesRequest>(arguments)?;
     Ok(structured_result(ToolEngine::list_agent_preferences(
         request,
     )?))
 }
 
-fn call_set_agent_preference(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_set_agent_preference(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<SetAgentPreferenceRequest>(arguments)?;
     Ok(structured_result(ToolEngine::set_agent_preference(
         request,
     )?))
 }
 
-fn call_delete_agent_preference(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_delete_agent_preference(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<DeleteAgentPreferenceRequest>(arguments)?;
     Ok(structured_result(ToolEngine::delete_agent_preference(
         request,
     )?))
 }
 
-fn call_query_tool_logs(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_query_tool_logs(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ToolLogQueryRequest>(arguments)?;
     Ok(structured_result(ToolEngine::query_tool_logs(request)?))
 }
 
-fn call_export_tool_logs(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_export_tool_logs(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ToolLogExportRequest>(arguments)?;
     Ok(structured_result(ToolEngine::export_tool_logs(request)?))
 }
 
-fn call_index_hoi4_project(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_index_hoi4_project(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ProjectIndexRequest>(arguments)?;
     Ok(structured_result(ToolEngine::index_hoi4_project(request)?))
 }
 
-fn call_validate_hoi4_project(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_validate_hoi4_project(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ProjectValidationRequest>(arguments)?;
     Ok(structured_result(ToolEngine::validate_hoi4_project(
         request,
     )?))
 }
 
-fn call_repair_hoi4_project(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_repair_hoi4_project(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<RepairHoi4ProjectRequest>(arguments)?;
     Ok(structured_result(ToolEngine::repair_hoi4_project(request)?))
 }
 
-fn call_edit_hoi4_script_file(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_edit_hoi4_script_file(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<EditHoi4ScriptFileRequest>(arguments)?;
     Ok(structured_result(ToolEngine::edit_hoi4_script_file(
         request,
     )?))
 }
 
-fn call_generate_gui_gfx_asset(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_generate_gui_gfx_asset(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<GenerateGuiGfxAssetRequest>(arguments)?;
     Ok(structured_result(ToolEngine::generate_gui_gfx_asset(
         request,
     )?))
 }
 
-fn call_setup_hoi4_mod_skeleton(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_setup_hoi4_mod_skeleton(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<Hoi4ModSkeletonRequest>(arguments)?;
     Ok(structured_result(ToolEngine::setup_hoi4_mod_skeleton(
         request,
     )?))
 }
 
-fn call_validate_hoi4_paths(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_validate_hoi4_paths(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<ValidateHoi4PathsRequest>(arguments)?;
     Ok(structured_result(ToolEngine::validate_hoi4_paths(request)))
 }
 
-fn call_format_paradox_script(arguments: JsonObject) -> Result<CallToolResult, ToolError> {
+fn call_format_paradox_script(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
     let request = parse_arguments::<FormatParadoxScriptRequest>(arguments)?;
     Ok(structured_result(ToolEngine::format_paradox_script(
         request,

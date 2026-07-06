@@ -19,12 +19,14 @@
 // https://github.com/czxieddan/RHoiScribe
 //------------------------------------------------------------------------------------
 
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, sync::Arc};
 
 use rmcp::model::JsonObject;
 use serde_json::{Map, Value, json};
 
-use crate::{prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatalog};
+use crate::{
+    RhoiScribeRuntime, prompts::PromptCatalog, resources::ResourceCatalog, tools::ToolCatalog,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkillCommand {
@@ -60,6 +62,13 @@ pub enum SkillError {
 }
 
 pub fn execute_skill_command(command: SkillCommand) -> Result<String, SkillError> {
+    execute_skill_command_with_runtime(command, Arc::new(RhoiScribeRuntime::new()))
+}
+
+pub fn execute_skill_command_with_runtime(
+    command: SkillCommand,
+    runtime: Arc<RhoiScribeRuntime>,
+) -> Result<String, SkillError> {
     match command {
         SkillCommand::ListTools => serialize(json!({
             "tools": ToolCatalog::builtin().to_mcp_tools()
@@ -98,7 +107,7 @@ pub fn execute_skill_command(command: SkillCommand) -> Result<String, SkillError
         } => {
             let arguments = parse_object("call-tool", &arguments_json)?;
             let result = ToolCatalog::builtin()
-                .call(&name, arguments)
+                .call_with_runtime(runtime, &name, arguments)
                 .map_err(|error| SkillError::Tool(error.to_string()))?;
             serialize(result)
         }
