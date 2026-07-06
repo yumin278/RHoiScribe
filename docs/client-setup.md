@@ -164,9 +164,9 @@ Windows clients usually need the `.exe` path and escaped backslashes in JSON:
 - Network: no runtime network access is required.
 - Prompts: available through `prompts/list` and `prompts/get`.
 - Resources: available through `resources/list` and `resources/read`.
-- CWT resources: `rhoiscribe://hoi4/cwt/catalog` and `rhoiscribe://hoi4/cwt/metadata` describe the pinned NS9927/cwtools-hoi4-config snapshot, revision, hash, virtual source prefix, and no-runtime-disk policy.
+- CWT resources: `rhoiscribe://hoi4/cwt/catalog` and `rhoiscribe://hoi4/cwt/metadata` describe the pinned HOI4 CWT rules crate, upstream revision, hash, virtual source prefix, and no-runtime-disk policy.
 - Tools: available through `tools/list` and `tools/call`.
-- CWT memory policy: embedded CWT rules are loaded from compiled binary bytes into process memory. RHoiScribe does not extract rule files, create CWT caches, create CWT lock files, or store CWT language state in RNMDB. CWT language tools also skip RHoiScribe tool-call logging so CWT diagnostics and workspace language state are not written to the `.rhoiscribe` log store.
+- CWT memory policy: embedded CWT rules are loaded from the compiled Cargo git dependency's static source table into process memory. RHoiScribe does not extract rule files, create CWT caches, create CWT lock files, or store CWT language state in RNMDB. CWT language tools also skip RHoiScribe tool-call logging so CWT diagnostics and workspace language state are not written to the `.rhoiscribe` log store.
 - CWT workspace: call `open_hoi4_language_workspace` with the current mod root early in MCP sessions, then poll `get_hoi4_language_status` until the workspace is warm. Reopen the workspace when the mod root, rules override, vanilla root, ignore globs, or language configuration changes.
 - CWT diagnostics: `validate_hoi4_project` defaults to hybrid CWT plus legacy checks. Use `validation_mode = "legacy"` for legacy-only behavior, `validation_mode = "cwt"` for CWT-only behavior, or `validation_mode = "hybrid"` explicitly when you want both.
 - CWT file checks: `validate_hoi4_file` validates one saved file or unsaved content with embedded rules and an optional resident workspace handle.

@@ -44,7 +44,7 @@ pub struct CwtWorkspaceConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CwtRulesSource {
-    EmbeddedGithubConfig,
+    EmbeddedRulesCrate,
     ExternalPath(PathBuf),
 }
 
@@ -115,7 +115,7 @@ impl Default for CwtWorkspaceConfig {
     fn default() -> Self {
         Self {
             workspace_root: PathBuf::new(),
-            rules_source: CwtRulesSource::EmbeddedGithubConfig,
+            rules_source: CwtRulesSource::EmbeddedRulesCrate,
             vanilla_root: None,
             ignore_globs: Vec::new(),
             localisation_languages: vec!["english".to_string()],
@@ -276,7 +276,7 @@ fn build_workspace_snapshot(
     config: &CwtWorkspaceConfig,
 ) -> Result<CwtWorkspaceSnapshot, CwtWorkspaceError> {
     let rules = match &config.rules_source {
-        CwtRulesSource::EmbeddedGithubConfig => load_embedded_hoi4_cwt_rules(),
+        CwtRulesSource::EmbeddedRulesCrate => load_embedded_hoi4_cwt_rules(),
         CwtRulesSource::ExternalPath(path) => load_external_cwt_rules(path),
     }
     .map_err(|error| CwtWorkspaceError::Rules(error.to_string()))?;
@@ -471,7 +471,7 @@ fn join_relative_path(root: &Path, path: &str) -> PathBuf {
 
 fn rules_source_id(source: &CwtRulesSource) -> String {
     match source {
-        CwtRulesSource::EmbeddedGithubConfig => HOI4_CWT_CONFIG.embedded_source_id(),
+        CwtRulesSource::EmbeddedRulesCrate => HOI4_CWT_CONFIG.embedded_source_id(),
         CwtRulesSource::ExternalPath(path) => format!("external:{}", path_to_string(path)),
     }
 }

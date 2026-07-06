@@ -429,7 +429,7 @@ fn workspace_config_from_project_request(
 
     Ok(CwtWorkspaceConfig {
         workspace_root,
-        rules_source: CwtRulesSource::EmbeddedGithubConfig,
+        rules_source: CwtRulesSource::EmbeddedRulesCrate,
         vanilla_root,
         ignore_globs: vec!["target".to_string(), "tmp".to_string(), ".git".to_string()],
         localisation_languages: vec!["english".to_string()],
@@ -441,7 +441,7 @@ fn rules_source(path: Option<String>) -> CwtRulesSource {
     path.filter(|path| !path.trim().is_empty())
         .map(PathBuf::from)
         .map(CwtRulesSource::ExternalPath)
-        .unwrap_or(CwtRulesSource::EmbeddedGithubConfig)
+        .unwrap_or(CwtRulesSource::EmbeddedRulesCrate)
 }
 
 fn parse_workspace_mode(mode: Option<&str>) -> Result<CwtWorkspaceMode, ToolError> {

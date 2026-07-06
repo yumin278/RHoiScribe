@@ -67,7 +67,7 @@ impl CwtResourceCatalog {
                 uri: CWT_CATALOG_URI.to_string(),
                 name: "hoi4_cwt_catalog".to_string(),
                 title: "HOI4 CWT resource catalog".to_string(),
-                description: "Pinned build-time GitHub source for in-memory HOI4 CWT rules."
+                description: "Pinned Cargo git dependency source for in-memory HOI4 CWT rules."
                     .to_string(),
                 mime_type: "application/toml",
                 size: self.catalog_index.len(),
@@ -106,9 +106,9 @@ pub(crate) fn is_cwt_resource_uri(uri: &str) -> bool {
 fn catalog_index_toml() -> String {
     let mut output = String::new();
     let source_slug = HOI4_CWT_CONFIG.source_slug();
+    let repository_url = HOI4_CWT_CONFIG.repository_url();
     let upstream_url = HOI4_CWT_CONFIG.upstream_url();
     let git_url = HOI4_CWT_CONFIG.git_url();
-    let archive_url = HOI4_CWT_CONFIG.archive_url();
     let embedded_source_id = HOI4_CWT_CONFIG.embedded_source_id();
     let virtual_source_prefix = HOI4_CWT_CONFIG.virtual_source_prefix();
 
@@ -132,16 +132,26 @@ fn catalog_index_toml() -> String {
         toml_string(HOI4_CWT_CONFIG.source_directory)
     )
     .expect("writing to String cannot fail");
-    writeln!(&mut output, "upstream_url = {}", toml_string(&upstream_url))
-        .expect("writing to String cannot fail");
+    writeln!(
+        &mut output,
+        "repository_url = {}",
+        toml_string(&repository_url)
+    )
+    .expect("writing to String cannot fail");
     writeln!(&mut output, "git_url = {}", toml_string(&git_url))
         .expect("writing to String cannot fail");
-    writeln!(&mut output, "archive_url = {}", toml_string(&archive_url))
+    writeln!(&mut output, "upstream_url = {}", toml_string(&upstream_url))
         .expect("writing to String cannot fail");
     writeln!(
         &mut output,
         "revision = {}",
         toml_string(HOI4_CWT_CONFIG.revision)
+    )
+    .expect("writing to String cannot fail");
+    writeln!(
+        &mut output,
+        "upstream_revision = {}",
+        toml_string(HOI4_CWT_CONFIG.upstream_revision)
     )
     .expect("writing to String cannot fail");
     writeln!(
@@ -182,7 +192,9 @@ fn catalog_index_toml() -> String {
     .expect("writing to String cannot fail");
     writeln!(&mut output, "embedded_rule_files_in_repo = false")
         .expect("writing to String cannot fail");
-    writeln!(&mut output, "embedded_archive_bytes_in_binary = true")
+    writeln!(&mut output, "embedded_archive_bytes_in_binary = false")
+        .expect("writing to String cannot fail");
+    writeln!(&mut output, "embedded_static_sources_in_binary = true")
         .expect("writing to String cannot fail");
     writeln!(&mut output, "runtime_disk_entities = false").expect("writing to String cannot fail");
 
@@ -190,23 +202,24 @@ fn catalog_index_toml() -> String {
 }
 
 fn metadata_markdown() -> String {
+    let repository_url = HOI4_CWT_CONFIG.repository_url();
     let upstream_url = HOI4_CWT_CONFIG.upstream_url();
-    let archive_url = HOI4_CWT_CONFIG.archive_url();
     let virtual_source_prefix = HOI4_CWT_CONFIG.virtual_source_prefix();
 
     format!(
         "# HOI4 CWT config source\n\n\
-         - Upstream: {}\n\
+         - Rules crate: {}\n\
+         - Upstream rules: {}\n\
          - Revision: `{}`\n\
-         - Archive: {}\n\
+         - Upstream revision: `{}`\n\
          - License: {}\n\
          - Rule sources: {}\n\
          - Rule source bytes: {}\n\
          - Content SHA-256: `{}`\n\
          - Runtime storage: {}\n\
          - Embedded RHoiScribe rule files: none\n\n\
-         RHoiScribe embeds the pinned GitHub archive into the compiled binary at build time, \
-         decompresses `.cwt` files from static bytes in memory, and reports virtual paths under `{}`. \
+         RHoiScribe consumes the pinned rules crate as a Cargo git dependency and reads its \
+         static `.cwt` source table in process memory, reporting virtual paths under `{}`. \
          It does not extract, copy, cache, lock, or rewrite these rules on disk.\n\n\
          ## Runtime language support\n\n\
          Use `open_hoi4_language_workspace` early in MCP sessions, then poll \
@@ -220,9 +233,10 @@ fn metadata_markdown() -> String {
          CWT rules, diagnostics, workspace snapshots, symbols, completions, and localisation \
          candidates stay in process memory. CWT language tools skip RNMDB tool-call logging so \
          CWT analysis state is not written to the `.rhoiscribe` log store.\n",
+        repository_url,
         upstream_url,
         HOI4_CWT_CONFIG.revision,
-        archive_url,
+        HOI4_CWT_CONFIG.upstream_revision,
         HOI4_CWT_CONFIG.license,
         HOI4_CWT_CONFIG_SOURCE_COUNT,
         HOI4_CWT_CONFIG_TOTAL_BYTES,
