@@ -21,3 +21,5 @@
 
 pub mod rules;
 pub mod runtime;
+pub mod service;
+pub mod workspace;

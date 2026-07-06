@@ -26,9 +26,11 @@ use std::{
 };
 
 use super::rules::ReloadableCwtRules;
+use super::service::CwtLanguageService;
 
 pub struct RhoiScribeRuntime {
     cwt_rules: RwLock<ReloadableCwtRules>,
+    cwt_language: CwtLanguageService,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +42,7 @@ impl RhoiScribeRuntime {
     pub fn new() -> Self {
         Self {
             cwt_rules: RwLock::new(ReloadableCwtRules::new()),
+            cwt_language: CwtLanguageService::new(),
         }
     }
 
@@ -58,6 +61,10 @@ impl RhoiScribeRuntime {
             .write()
             .map_err(|_| RhoiScribeRuntimeError::CwtRulesLockPoisoned)
     }
+
+    pub fn cwt_language(&self) -> &CwtLanguageService {
+        &self.cwt_language
+    }
 }
 
 impl Default for RhoiScribeRuntime {
@@ -71,6 +78,7 @@ impl fmt::Debug for RhoiScribeRuntime {
         formatter
             .debug_struct("RhoiScribeRuntime")
             .field("cwt_rules", &"RwLock<ReloadableCwtRules>")
+            .field("cwt_language", &self.cwt_language)
             .finish()
     }
 }
