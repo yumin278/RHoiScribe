@@ -68,7 +68,7 @@ RHoiScribe дает agents локальный слой знаний HOI4, reusab
 На верхнем уровне он помогает agents с:
 
 - пониманием структуры проекта и связей перед крупными правками
-- resident in-memory CWT language checks, symbols, references, completions и localisation assistance
+- поддержкой языка HOI4 на основе [cwtools](https://github.com/MillenniumDawn/cwtools)
 - red/yellow/green проверками рисков загрузки перед передачей результата
 - быстрой проверкой encoding, formatting и media conventions
 - безопасным редактированием существующих файлов с учетом workspace conventions
@@ -76,8 +76,6 @@ RHoiScribe дает agents локальный слой знаний HOI4, reusab
 - cross-IDE agent state в `.rhoiscribe` через RNMDB
 - audit logs вызовов tools с regex-filtered export из той же state database
 - experimental GUI/GFX asset creation после user approval на новую procedural art
-
-CWT language support использует bundled upstream rules snapshot внутри binary и работает в process memory. Runtime network не требуется; CWT rules, indexes, diagnostics и language-service caches не извлекаются и не записываются на диск.
 
 Skill package — самый быстрый способ дать совместимому agent локальный доступ без изменения MCP configuration. Для полной функциональности и более плавной работы используйте MCP server, если ваш agent поддерживает MCP.
 
