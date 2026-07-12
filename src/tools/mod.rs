@@ -48,7 +48,7 @@ mod unique_scan;
 
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path, sync::Arc};
 
-use rmcp::model::{CallToolResult, JsonObject, Tool, ToolAnnotations};
+use rmcp::model::{CallToolResult, Content, JsonObject, Tool, ToolAnnotations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
@@ -595,6 +595,10 @@ pub enum ToolError {
     InvalidArguments(serde_json::Error),
     InvalidRequest(String),
     StateDatabaseFailed(String),
+    ToolFailedAfterStateMigration {
+        notice: String,
+        source: Box<ToolError>,
+    },
     WriteFailed(std::io::Error),
 }
 
@@ -645,7 +649,7 @@ impl ToolCatalog {
         let arguments_for_log = Value::Object(arguments.clone());
         let result = self.call_without_logging(&context, name, arguments);
         match self.record_tool_log(name, arguments_for_log, &result) {
-            Ok(()) => result,
+            Ok(migration_message) => append_migration_message(result, migration_message),
             Err(log_error) => match result {
                 Ok(_) => Err(log_error),
                 Err(tool_error) => Err(ToolError::StateDatabaseFailed(format!(
@@ -675,12 +679,12 @@ impl ToolCatalog {
         name: &str,
         arguments: Value,
         result: &Result<CallToolResult, ToolError>,
-    ) -> Result<(), ToolError> {
+    ) -> Result<Option<String>, ToolError> {
         if cwt_diagnostics::should_skip_tool_log(name, &arguments)
             || cwt_intelligence::is_cwt_intelligence_tool(name)
             || cwt_localisation::is_cwt_localisation_tool(name)
         {
-            return Ok(());
+            return Ok(None);
         }
 
         let store_path = arguments
@@ -703,6 +707,25 @@ impl ToolCatalog {
                 name, error
             ))
         })
+    }
+}
+
+fn append_migration_message(
+    result: Result<CallToolResult, ToolError>,
+    migration_message: Option<String>,
+) -> Result<CallToolResult, ToolError> {
+    let Some(message) = migration_message else {
+        return result;
+    };
+    match result {
+        Ok(mut result) => {
+            result.content.push(Content::text(message));
+            Ok(result)
+        }
+        Err(source) => Err(ToolError::ToolFailedAfterStateMigration {
+            notice: message,
+            source: Box::new(source),
+        }),
     }
 }
 
@@ -979,12 +1002,24 @@ impl fmt::Display for ToolError {
             ToolError::StateDatabaseFailed(message) => {
                 write!(formatter, "RHoiScribe state database error: {}", message)
             }
+            ToolError::ToolFailedAfterStateMigration { notice, source } => {
+                write!(formatter, "{source}; {notice}")
+            }
             ToolError::WriteFailed(error) => write!(formatter, "write failed: {}", error),
         }
     }
 }
 
-impl Error for ToolError {}
+impl Error for ToolError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ToolError::InvalidArguments(error) => Some(error),
+            ToolError::ToolFailedAfterStateMigration { source, .. } => Some(source.as_ref()),
+            ToolError::WriteFailed(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl From<std::io::Error> for ToolError {
     fn from(error: std::io::Error) -> Self {

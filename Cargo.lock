@@ -1537,6 +1537,7 @@ dependencies = [
  "rnmdb-common",
  "rnmdb-fts",
  "rnmdb-storage",
+ "rnmdb-types",
  "serde",
  "serde_json",
  "tokio",

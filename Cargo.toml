@@ -19,6 +19,7 @@ rnmdb-cli = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2
 rnmdb-common = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-fts = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-storage = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-types = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rmcp = { version = "1.7.0", features = ["server", "transport-io"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"

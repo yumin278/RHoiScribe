@@ -20,28 +20,20 @@
 //------------------------------------------------------------------------------------
 
 use std::{
-    collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    path::{Path, PathBuf},
-    thread,
-    time::{Duration, SystemTime},
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::rnmdb_store::{
-    DEFAULT_RNMDB_PAGE_SIZE_BYTES, RnmdbSingleFilePageStore, clean_display_path,
-    default_rhoiscribe_dir,
+use crate::state::{
+    GLOBAL_SCOPE_KEY, GLOBAL_SCOPE_KIND, RnmdbStateStore, StateMutationLock,
+    StoredPreferenceRecord, clean_display_path, global_record_key, state_database_error,
+    state_store_path,
 };
 
-const PREFERENCES_PAGE_ID: u64 = 1;
-const PREFERENCES_SCHEMA_VERSION: u32 = 1;
-const STATE_DATABASE_FILE_NAME: &str = "state.rnmdb";
-const LEGACY_STATE_DATABASE_FILE_NAME: &str = "rhoiscribe-state.rnmdb";
-const PREFERENCE_LOCK_RETRY_COUNT: usize = 250;
-const PREFERENCE_LOCK_RETRY_DELAY: Duration = Duration::from_millis(20);
-const STALE_LOCK_AFTER: Duration = Duration::from_secs(30 * 60);
+const BACKEND_NAME: &str = "RNMDB single-file page store";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ListAgentPreferencesRequest {
@@ -86,27 +78,23 @@ pub struct AgentPreferenceMutationResult {
     pub messages: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-struct StoredPreferences {
-    schema_version: u32,
-    preferences: BTreeMap<String, Value>,
-}
-
 pub fn list_agent_preferences(
     request: ListAgentPreferencesRequest,
 ) -> Result<AgentPreferencesResult, String> {
     let store_path = preference_store_path(request.store_path.as_deref());
-    let store = open_preference_store(&store_path)?;
-    let snapshot = read_preferences(&store, &store_path)?;
-    let preferences = preference_items(&snapshot.preferences);
-
+    let _lock = acquire_store_lock(&store_path)?;
+    let mut store = RnmdbStateStore::open(&store_path)?;
+    let migration_message = take_migration_message(&mut store);
+    let records = store.list_global_preferences()?;
+    let preferences = preference_items(records, &store_path)?;
     Ok(AgentPreferencesResult {
         store_path: clean_display_path(&store_path),
-        backend: "RNMDB single-file page store".to_string(),
+        backend: BACKEND_NAME.to_string(),
         preferences,
-        messages: vec![
-            "preferences are shared across MCP clients and IDEs through .rhoiscribe".to_string(),
-        ],
+        messages: result_messages(
+            "preferences are shared across MCP clients and IDEs through .rhoiscribe",
+            migration_message,
+        ),
     })
 }
 
@@ -115,23 +103,23 @@ pub fn set_agent_preference(
 ) -> Result<AgentPreferenceMutationResult, String> {
     let key = normalized_preference_key(&request.key)?;
     let store_path = preference_store_path(request.store_path.as_deref());
-    let _lock = PreferenceMutationLock::acquire(&store_path)
-        .map_err(|error| state_database_error(&store_path, error))?;
-    let store = open_preference_store(&store_path)?;
-    let mut snapshot = read_preferences(&store, &store_path)?;
-    snapshot
-        .preferences
-        .insert(key.clone(), request.value.clone());
-    write_preferences(&store, &store_path, &snapshot)?;
-
+    let _lock = acquire_store_lock(&store_path)?;
+    let mut store = RnmdbStateStore::open(&store_path)?;
+    let migration_message = take_migration_message(&mut store);
+    let record = stored_preference(&key, &request.value, &store_path)?;
+    store.upsert_preference(&record)?;
+    let preferences = preference_items(store.list_global_preferences()?, &store_path)?;
     Ok(AgentPreferenceMutationResult {
         store_path: clean_display_path(&store_path),
-        backend: "RNMDB single-file page store".to_string(),
+        backend: BACKEND_NAME.to_string(),
         key,
         removed: false,
         value: Some(request.value),
-        preferences: preference_items(&snapshot.preferences),
-        messages: vec!["preference stored in RNMDB-backed .rhoiscribe state".to_string()],
+        preferences,
+        messages: result_messages(
+            "preference stored in RNMDB-backed .rhoiscribe state",
+            migration_message,
+        ),
     })
 }
 
@@ -140,223 +128,105 @@ pub fn delete_agent_preference(
 ) -> Result<AgentPreferenceMutationResult, String> {
     let key = normalized_preference_key(&request.key)?;
     let store_path = preference_store_path(request.store_path.as_deref());
-    let _lock = PreferenceMutationLock::acquire(&store_path)
-        .map_err(|error| state_database_error(&store_path, error))?;
-    let store = open_preference_store(&store_path)?;
-    let mut snapshot = read_preferences(&store, &store_path)?;
-    let value = snapshot.preferences.remove(&key);
-    write_preferences(&store, &store_path, &snapshot)?;
-
+    let _lock = acquire_store_lock(&store_path)?;
+    let mut store = RnmdbStateStore::open(&store_path)?;
+    let migration_message = take_migration_message(&mut store);
+    let records = store.list_global_preferences()?;
+    let value = preference_value(&records, &key, &store_path)?;
+    let removed = store.delete_preference(&global_record_key(&key))?;
+    let preferences = preference_items(store.list_global_preferences()?, &store_path)?;
     Ok(AgentPreferenceMutationResult {
         store_path: clean_display_path(&store_path),
-        backend: "RNMDB single-file page store".to_string(),
+        backend: BACKEND_NAME.to_string(),
         key,
-        removed: value.is_some(),
+        removed,
         value,
-        preferences: preference_items(&snapshot.preferences),
-        messages: vec!["preference state updated in RNMDB".to_string()],
+        preferences,
+        messages: result_messages("preference state updated in RNMDB", migration_message),
     })
 }
 
 pub(crate) fn preference_store_path(store_path: Option<&str>) -> PathBuf {
-    let path = store_path
-        .map(|path| PathBuf::from(path.trim().trim_matches('"')))
-        .unwrap_or_else(|| default_rhoiscribe_dir().join(STATE_DATABASE_FILE_NAME));
-    canonical_state_database_path(path)
-}
-
-pub(crate) struct PreferenceMutationLock {
-    path: PathBuf,
-    _file: File,
-}
-
-impl PreferenceMutationLock {
-    pub(crate) fn acquire(store_path: &Path) -> Result<Self, String> {
-        let path = preference_lock_path(store_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        }
-
-        for _ in 0..PREFERENCE_LOCK_RETRY_COUNT {
-            remove_stale_lock(&path)?;
-            match OpenOptions::new().write(true).create_new(true).open(&path) {
-                Ok(file) => return Ok(Self { path, _file: file }),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    thread::sleep(PREFERENCE_LOCK_RETRY_DELAY);
-                }
-                Err(error) => return Err(error.to_string()),
-            }
-        }
-
-        Err(format!(
-            "timed out waiting for preference store lock at {}",
-            clean_display_path(&path)
-        ))
-    }
-}
-
-impl Drop for PreferenceMutationLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-fn preference_lock_path(store_path: &Path) -> PathBuf {
-    let mut file_name = store_path
-        .file_name()
-        .unwrap_or_else(|| std::ffi::OsStr::new(STATE_DATABASE_FILE_NAME))
-        .to_os_string();
-    file_name.push(".lock");
-    store_path.with_file_name(file_name)
-}
-
-fn remove_stale_lock(path: &Path) -> Result<(), String> {
-    let Ok(metadata) = fs::metadata(path) else {
-        return Ok(());
-    };
-    let Ok(modified) = metadata.modified() else {
-        return Ok(());
-    };
-    if SystemTime::now()
-        .duration_since(modified)
-        .is_ok_and(|age| age > STALE_LOCK_AFTER)
-    {
-        fs::remove_file(path).map_err(|error| error.to_string())?;
-    }
-    Ok(())
-}
-
-pub(crate) fn open_preference_store(path: &Path) -> Result<RnmdbSingleFilePageStore, String> {
-    let legacy_path = legacy_state_database_path(path);
-    RnmdbSingleFilePageStore::open_or_create_with_legacy_source(
-        path,
-        &legacy_path,
-        DEFAULT_RNMDB_PAGE_SIZE_BYTES,
-    )
-    .map_err(|error| state_database_error(path, error))
-}
-
-fn canonical_state_database_path(path: PathBuf) -> PathBuf {
-    if path.file_name().is_some_and(|name| {
-        name.to_string_lossy()
-            .eq_ignore_ascii_case(LEGACY_STATE_DATABASE_FILE_NAME)
-    }) {
-        return path.with_file_name(STATE_DATABASE_FILE_NAME);
-    }
-    path
-}
-
-fn legacy_state_database_path(path: &Path) -> PathBuf {
-    if path.file_name().is_some_and(|name| {
-        name.to_string_lossy()
-            .eq_ignore_ascii_case(STATE_DATABASE_FILE_NAME)
-    }) {
-        return path.with_file_name(LEGACY_STATE_DATABASE_FILE_NAME);
-    }
-    path.to_path_buf()
-}
-
-pub(crate) fn state_database_error(path: &Path, error: String) -> String {
-    if error.starts_with("RHoiScribe state database `") {
-        return error;
-    }
-    format!(
-        "RHoiScribe state database `{}` failed: {}",
-        clean_display_path(path),
-        error
-    )
+    state_store_path(store_path)
 }
 
 pub(crate) fn is_state_database_error(error: &str) -> bool {
-    error.starts_with("RHoiScribe state database `")
+    crate::state::is_state_database_error(error)
 }
 
-fn read_preferences(
-    store: &RnmdbSingleFilePageStore,
-    path: &Path,
-) -> Result<StoredPreferences, String> {
-    let Some(payload) = store
-        .read_payload_page(PREFERENCES_PAGE_ID)
-        .map_err(|error| {
-            state_database_error(path, format!("failed to read preferences page: {error}"))
-        })?
-    else {
-        return Ok(default_preferences());
-    };
-    decode_preferences_payload(&payload).map_err(|error| {
-        state_database_error(path, format!("failed to decode preferences page: {error}"))
+fn acquire_store_lock(store_path: &std::path::Path) -> Result<StateMutationLock, String> {
+    StateMutationLock::acquire(store_path)
+        .map_err(|error| state_database_error(store_path, "open", error))
+}
+
+fn take_migration_message(store: &mut RnmdbStateStore) -> Option<String> {
+    store
+        .take_migration_report()
+        .map(|report| report.retained_backup_message())
+}
+
+fn result_messages(primary: &str, migration: Option<String>) -> Vec<String> {
+    let mut messages = vec![primary.to_string()];
+    if let Some(message) = migration {
+        messages.push(message);
+    }
+    messages
+}
+
+fn stored_preference(
+    key: &str,
+    value: &Value,
+    store_path: &std::path::Path,
+) -> Result<StoredPreferenceRecord, String> {
+    let value_json = serde_json::to_string(value)
+        .map_err(|error| state_database_error(store_path, "query", error.to_string()))?;
+    Ok(StoredPreferenceRecord {
+        record_key: global_record_key(key),
+        scope_kind: GLOBAL_SCOPE_KIND.to_string(),
+        scope_key: GLOBAL_SCOPE_KEY.to_string(),
+        mod_root: None,
+        preference_key: key.to_string(),
+        value_json,
+        updated_at_unix_seconds: unix_timestamp_now(),
     })
 }
 
-fn write_preferences(
-    store: &RnmdbSingleFilePageStore,
-    path: &Path,
-    preferences: &StoredPreferences,
-) -> Result<(), String> {
-    let payload =
-        encode_preferences_payload(preferences, store.page_size_bytes()).map_err(|error| {
-            state_database_error(path, format!("failed to encode preferences page: {error}"))
-        })?;
-    store
-        .write_payload_page(PREFERENCES_PAGE_ID, payload)
-        .map_err(|error| {
-            state_database_error(path, format!("failed to write preferences page: {error}"))
-        })
-}
-
-fn default_preferences() -> StoredPreferences {
-    StoredPreferences {
-        schema_version: PREFERENCES_SCHEMA_VERSION,
-        preferences: BTreeMap::new(),
-    }
-}
-
-fn decode_preferences_payload(payload: &[u8]) -> Result<StoredPreferences, String> {
-    if payload.len() < 4 {
-        return Ok(default_preferences());
-    }
-    let length = u32::from_be_bytes([payload[0], payload[1], payload[2], payload[3]]) as usize;
-    if length == 0 {
-        return Ok(default_preferences());
-    }
-    if length > payload.len().saturating_sub(4) {
-        return Err("stored RNMDB preference page has an invalid payload length".to_string());
-    }
-    let mut preferences = serde_json::from_slice::<StoredPreferences>(&payload[4..4 + length])
-        .map_err(|error| error.to_string())?;
-    if preferences.schema_version == 0 {
-        preferences.schema_version = PREFERENCES_SCHEMA_VERSION;
-    }
-    Ok(preferences)
-}
-
-fn encode_preferences_payload(
-    preferences: &StoredPreferences,
-    page_size_bytes: usize,
-) -> Result<Vec<u8>, String> {
-    let encoded = serde_json::to_vec(preferences).map_err(|error| error.to_string())?;
-    if encoded.len() + 4 > page_size_bytes {
-        return Err(format!(
-            "preference payload is too large for the RNMDB page: {} bytes > {} bytes",
-            encoded.len() + 4,
-            page_size_bytes
-        ));
-    }
-
-    let mut payload = vec![0_u8; page_size_bytes];
-    payload[..4].copy_from_slice(&(encoded.len() as u32).to_be_bytes());
-    payload[4..4 + encoded.len()].copy_from_slice(&encoded);
-    Ok(payload)
-}
-
-fn preference_items(preferences: &BTreeMap<String, Value>) -> Vec<AgentPreferenceItem> {
-    preferences
-        .iter()
-        .map(|(key, value)| AgentPreferenceItem {
-            key: key.clone(),
-            value: value.clone(),
-        })
+fn preference_items(
+    records: Vec<StoredPreferenceRecord>,
+    store_path: &std::path::Path,
+) -> Result<Vec<AgentPreferenceItem>, String> {
+    records
+        .into_iter()
+        .map(|record| preference_item(record, store_path))
         .collect()
+}
+
+fn preference_item(
+    record: StoredPreferenceRecord,
+    store_path: &std::path::Path,
+) -> Result<AgentPreferenceItem, String> {
+    let value = decode_preference_value(&record.value_json, store_path)?;
+    Ok(AgentPreferenceItem {
+        key: record.preference_key,
+        value,
+    })
+}
+
+fn preference_value(
+    records: &[StoredPreferenceRecord],
+    key: &str,
+    store_path: &std::path::Path,
+) -> Result<Option<Value>, String> {
+    records
+        .iter()
+        .find(|record| record.preference_key == key)
+        .map(|record| decode_preference_value(&record.value_json, store_path))
+        .transpose()
+}
+
+fn decode_preference_value(value: &str, store_path: &std::path::Path) -> Result<Value, String> {
+    serde_json::from_str(value)
+        .map_err(|error| state_database_error(store_path, "query", error.to_string()))
 }
 
 fn normalized_preference_key(key: &str) -> Result<String, String> {
@@ -374,4 +244,11 @@ fn normalized_preference_key(key: &str) -> Result<String, String> {
         );
     }
     Ok(key.to_ascii_lowercase())
+}
+
+fn unix_timestamp_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
 }

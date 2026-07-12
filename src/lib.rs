@@ -25,6 +25,7 @@ pub mod prompts;
 pub mod resources;
 pub mod server;
 pub mod skill;
+mod state;
 pub mod tools;
 
 pub use cwt::runtime::RhoiScribeRuntime;
