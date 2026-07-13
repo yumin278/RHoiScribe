@@ -28,6 +28,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use rnmdb_cli::page_key_from_hex;
 use rnmdb_storage::PageCryptoKey;
 
 pub(crate) const STATE_DATABASE_FILE_NAME: &str = "state.rnmdb";
@@ -125,31 +126,49 @@ fn sync_directory(path: &Path) -> std::io::Result<()> {
 }
 
 pub(crate) fn page_crypto_key() -> Result<PageCryptoKey, String> {
-    page_key_bytes().map(PageCryptoKey::from_bytes)
-}
-
-fn page_key_bytes() -> Result<[u8; 32], String> {
     let path = default_rhoiscribe_dir().join(PAGE_KEY_FILE_NAME);
     match read_page_key(&path)? {
-        Some(bytes) => Ok(bytes),
+        Some(key) => Ok(key),
         None => create_page_key(&path),
     }
 }
 
-fn read_page_key(path: &Path) -> Result<Option<[u8; 32]>, String> {
+pub(crate) fn existing_page_crypto_key() -> Result<PageCryptoKey, String> {
+    let path = default_rhoiscribe_dir().join(PAGE_KEY_FILE_NAME);
+    read_page_key(&path)?.ok_or_else(|| {
+        format!(
+            "existing RNMDB page key is missing at {}",
+            clean_display_path(&path)
+        )
+    })
+}
+
+fn read_page_key(path: &Path) -> Result<Option<PageCryptoKey>, String> {
     if !path.exists() {
         return Ok(None);
     }
-    let content = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    decode_hex_key(content.trim()).map(Some)
+    let content = fs::read_to_string(path).map_err(|error| {
+        format!(
+            "failed to read RNMDB page key at {}: {error}",
+            clean_display_path(path)
+        )
+    })?;
+    page_key_from_hex(content.trim())
+        .map(Some)
+        .map_err(|error| {
+            format!(
+                "RNMDB page key at {} is invalid: {error}",
+                clean_display_path(path)
+            )
+        })
 }
 
-fn create_page_key(path: &Path) -> Result<[u8; 32], String> {
+fn create_page_key(path: &Path) -> Result<PageCryptoKey, String> {
     ensure_parent(path)?;
     let mut bytes = [0_u8; 32];
     getrandom::getrandom(&mut bytes).map_err(|error| error.to_string())?;
     match write_new_page_key(path, &bytes) {
-        Ok(()) => Ok(bytes),
+        Ok(()) => Ok(PageCryptoKey::from_bytes(bytes)),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             concurrent_page_key(path)
         }
@@ -157,7 +176,7 @@ fn create_page_key(path: &Path) -> Result<[u8; 32], String> {
     }
 }
 
-fn concurrent_page_key(path: &Path) -> Result<[u8; 32], String> {
+fn concurrent_page_key(path: &Path) -> Result<PageCryptoKey, String> {
     read_page_key(path)?
         .ok_or_else(|| "RNMDB page key was created concurrently but could not be read".to_string())
 }
@@ -201,35 +220,11 @@ fn encode_hex_key(bytes: &[u8; 32]) -> String {
     output
 }
 
-fn decode_hex_key(value: &str) -> Result<[u8; 32], String> {
-    if value.len() != 64 {
-        return Err("RNMDB page key must be 64 hexadecimal characters".to_string());
-    }
-    decode_hex_bytes(value.as_bytes())
-}
-
-fn decode_hex_bytes(value: &[u8]) -> Result<[u8; 32], String> {
-    let mut bytes = [0_u8; 32];
-    for (index, chunk) in value.chunks_exact(2).enumerate() {
-        bytes[index] = (hex_to_nibble(chunk[0])? << 4) | hex_to_nibble(chunk[1])?;
-    }
-    Ok(bytes)
-}
-
 fn nibble_to_hex(value: u8) -> char {
     match value {
         0..=9 => char::from(b'0' + value),
         10..=15 => char::from(b'a' + value - 10),
         _ => '?',
-    }
-}
-
-fn hex_to_nibble(value: u8) -> Result<u8, String> {
-    match value {
-        b'0'..=b'9' => Ok(value - b'0'),
-        b'a'..=b'f' => Ok(value - b'a' + 10),
-        b'A'..=b'F' => Ok(value - b'A' + 10),
-        _ => Err("RNMDB page key contains a non-hexadecimal character".to_string()),
     }
 }
 

@@ -22,6 +22,7 @@
 use std::path::{Path, PathBuf};
 
 pub(crate) mod legacy;
+pub(crate) mod maintenance;
 pub(crate) mod path;
 pub(crate) mod scope;
 pub(crate) mod store;

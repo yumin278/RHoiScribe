@@ -15,8 +15,10 @@ cwtools_validation = { git = "https://github.com/MillenniumDawn/cwtools.git", re
 encoding_rs = "0.8.35"
 getrandom = "0.2.17"
 rchadow = { git = "https://github.com/czxieddan/Rchadow.git", rev = "ed0030084a56dd0ef6768843a739c6c10ec69316", features = ["rnmdb"] }
+rnmdb-catalog = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-cli = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-common = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-executor = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-fts = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-storage = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rnmdb-types = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }

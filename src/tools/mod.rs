@@ -43,6 +43,7 @@ mod project_validation;
 mod rchadow_debug;
 mod rnmdb_store;
 mod script_edit;
+mod state_maintenance;
 mod tool_logs;
 mod unique_scan;
 
@@ -102,6 +103,10 @@ pub use project_validation::{
 };
 pub use rchadow_debug::{RchadowDebugLaunchRequest, RchadowDebugLaunchResult};
 pub use script_edit::{EditHoi4ScriptFileRequest, EditHoi4ScriptFileResult, ScriptEditOperation};
+pub use state_maintenance::{
+    BackupRhoiscribeStateRequest, BackupRhoiscribeStateResult, InspectRhoiscribeStateRequest,
+    InspectRhoiscribeStateResult,
+};
 pub use tool_logs::{
     ToolLogEntry, ToolLogExportRequest, ToolLogExportResult, ToolLogQueryRequest,
     ToolLogQueryResult, ToolLogTextRank,
@@ -295,6 +300,20 @@ const TOOL_SPECS: &[ToolSpec] = &[
         description: "Export scoped RHoiScribe tool-call logs as JSON using the same structured, regex, and ranked RNMDB full-text filters as query_tool_logs.",
         required: &["output_path"],
         handler: call_export_tool_logs,
+    },
+    ToolSpec {
+        name: "inspect_rhoiscribe_state",
+        title: "Inspect RHoiScribe state",
+        description: "Inspect the existing encrypted RHoiScribe RNMDB state database without creating, migrating, repairing, or logging to it. Set deep_verify=true to authenticate every present page with the existing page key.",
+        required: &[],
+        handler: call_inspect_rhoiscribe_state,
+    },
+    ToolSpec {
+        name: "backup_rhoiscribe_state",
+        title: "Backup RHoiScribe state",
+        description: "Validate a non-overwriting encrypted RNMDB state backup plan. The operation is a dry run unless apply=true; an applied backup is authenticated before success is returned.",
+        required: &["destination"],
+        handler: call_backup_rhoiscribe_state,
     },
     ToolSpec {
         name: "index_hoi4_project",
@@ -681,7 +700,8 @@ impl ToolCatalog {
         arguments: Value,
         result: &Result<CallToolResult, ToolError>,
     ) -> Result<Option<String>, ToolError> {
-        if cwt_diagnostics::should_skip_tool_log(name, &arguments)
+        if state_maintenance::is_state_maintenance_tool(name)
+            || cwt_diagnostics::should_skip_tool_log(name, &arguments)
             || cwt_intelligence::is_cwt_intelligence_tool(name)
             || cwt_localisation::is_cwt_localisation_tool(name)
         {
@@ -931,6 +951,18 @@ impl ToolEngine {
         request: ToolLogExportRequest,
     ) -> Result<ToolLogExportResult, ToolError> {
         tool_logs::export_tool_logs(request).map_err(map_state_database_error)
+    }
+
+    pub fn inspect_rhoiscribe_state(
+        request: InspectRhoiscribeStateRequest,
+    ) -> Result<InspectRhoiscribeStateResult, ToolError> {
+        state_maintenance::inspect_rhoiscribe_state(request).map_err(map_state_database_error)
+    }
+
+    pub fn backup_rhoiscribe_state(
+        request: BackupRhoiscribeStateRequest,
+    ) -> Result<BackupRhoiscribeStateResult, ToolError> {
+        state_maintenance::backup_rhoiscribe_state(request).map_err(map_state_database_error)
     }
 
     pub fn index_hoi4_project(
@@ -1311,6 +1343,26 @@ fn call_export_tool_logs(
     Ok(structured_result(ToolEngine::export_tool_logs(request)?))
 }
 
+fn call_inspect_rhoiscribe_state(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
+    let request = parse_arguments::<InspectRhoiscribeStateRequest>(arguments)?;
+    Ok(structured_result(ToolEngine::inspect_rhoiscribe_state(
+        request,
+    )?))
+}
+
+fn call_backup_rhoiscribe_state(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
+    let request = parse_arguments::<BackupRhoiscribeStateRequest>(arguments)?;
+    Ok(structured_result(ToolEngine::backup_rhoiscribe_state(
+        request,
+    )?))
+}
+
 fn call_index_hoi4_project(
     _context: &ToolContext,
     arguments: JsonObject,
@@ -1399,7 +1451,10 @@ fn input_schema(tool_name: &str, required: &[&str]) -> JsonObject {
                 .collect(),
         ),
     );
-    schema.insert("additionalProperties".to_string(), Value::Bool(true));
+    schema.insert(
+        "additionalProperties".to_string(),
+        Value::Bool(!state_maintenance::is_state_maintenance_tool(tool_name)),
+    );
     let properties = tool_properties(tool_name);
     if !properties.is_empty() {
         schema.insert("properties".to_string(), Value::Object(properties));
@@ -1415,6 +1470,14 @@ fn tool_properties(tool_name: &str) -> Map<String, Value> {
         "generate_decision_batch" => decision_batch_properties(),
         "query_tool_logs" => query_tool_logs_properties(),
         "export_tool_logs" => export_tool_logs_properties(),
+        _ => state_maintenance_tool_properties(tool_name),
+    }
+}
+
+fn state_maintenance_tool_properties(tool_name: &str) -> Map<String, Value> {
+    match tool_name {
+        "inspect_rhoiscribe_state" => inspect_rhoiscribe_state_properties(),
+        "backup_rhoiscribe_state" => backup_rhoiscribe_state_properties(),
         _ => preference_tool_properties(tool_name),
     }
 }
@@ -1585,6 +1648,30 @@ fn export_tool_logs_properties() -> Map<String, Value> {
         }),
     );
     properties
+}
+
+fn inspect_rhoiscribe_state_properties() -> Map<String, Value> {
+    Map::from_iter([
+        preference_store_path_property(),
+        bool_property(
+            "deep_verify",
+            "Authenticate every present RNMDB page with the existing key without modifying state.",
+        ),
+    ])
+}
+
+fn backup_rhoiscribe_state_properties() -> Map<String, Value> {
+    Map::from_iter([
+        preference_store_path_property(),
+        text_property(
+            "destination",
+            "Explicit new backup file path. Its parent must already exist and overwrite is never allowed.",
+        ),
+        bool_property(
+            "apply",
+            "Omit or set false for a dry run; true creates and authenticates the new backup.",
+        ),
+    ])
 }
 
 fn tool_log_filter_properties() -> Map<String, Value> {
