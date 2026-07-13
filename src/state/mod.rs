@@ -75,6 +75,21 @@ pub(crate) struct StoredToolLogRecord {
     pub(crate) error_text: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct StoredToolLogFilter {
+    pub(crate) scope: Option<StateScope>,
+    pub(crate) tool_name: Option<String>,
+    pub(crate) success: Option<bool>,
+    pub(crate) since_unix_seconds: Option<u64>,
+    pub(crate) until_unix_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StoredToolLogSearchRow {
+    pub(crate) record: StoredToolLogRecord,
+    pub(crate) search_text: String,
+}
+
 pub(crate) fn state_database_error(path: &Path, stage: &str, detail: impl AsRef<str>) -> String {
     let detail = detail.as_ref();
     if is_state_database_error(detail) {

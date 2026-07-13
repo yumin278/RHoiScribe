@@ -104,7 +104,7 @@ pub use rchadow_debug::{RchadowDebugLaunchRequest, RchadowDebugLaunchResult};
 pub use script_edit::{EditHoi4ScriptFileRequest, EditHoi4ScriptFileResult, ScriptEditOperation};
 pub use tool_logs::{
     ToolLogEntry, ToolLogExportRequest, ToolLogExportResult, ToolLogQueryRequest,
-    ToolLogQueryResult,
+    ToolLogQueryResult, ToolLogTextRank,
 };
 pub use unique_scan::{
     CandidateScanResult, IdentifierCandidate, IdentifierMatch, PathRisk, ScanRoot,
@@ -285,14 +285,14 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "query_tool_logs",
         title: "Query tool logs",
-        description: "Read recent RHoiScribe tool-call logs from the same RNMDB-backed .rhoiscribe store as preferences. Supports optional regex filtering over each log entry's JSON text.",
+        description: "Read scoped RHoiScribe tool-call logs with structured filters, backward-compatible regex matching, and ranked RNMDB full-text queries. Omit mod_root to search all scopes.",
         required: &[],
         handler: call_query_tool_logs,
     },
     ToolSpec {
         name: "export_tool_logs",
         title: "Export tool logs",
-        description: "Export RHoiScribe tool-call logs as JSON from the same RNMDB-backed .rhoiscribe store as preferences. Supports optional regex filtering over each log entry's JSON text.",
+        description: "Export scoped RHoiScribe tool-call logs as JSON using the same structured, regex, and ranked RNMDB full-text filters as query_tool_logs.",
         required: &["output_path"],
         handler: call_export_tool_logs,
     },
@@ -1572,36 +1572,52 @@ fn decision_batch_properties() -> Map<String, Value> {
 }
 
 fn query_tool_logs_properties() -> Map<String, Value> {
-    Map::from_iter([
-        text_property(
-            "store_path",
-            "Optional RNMDB store path. Omit to use the shared .rhoiscribe preferences and logs database.",
-        ),
-        text_property(
-            "pattern",
-            "Optional Rust regex matched against each complete log entry serialized as JSON.",
-        ),
-        integer_property(
-            "limit",
-            "Maximum entries to return, clamped to the latest 32767 retained entries.",
-        ),
-    ])
+    tool_log_filter_properties()
 }
 
 fn export_tool_logs_properties() -> Map<String, Value> {
+    let mut properties = tool_log_filter_properties();
+    properties.insert(
+        "output_path".to_string(),
+        json!({
+            "type": "string",
+            "description": "JSON file path to write the exported logs."
+        }),
+    );
+    properties
+}
+
+fn tool_log_filter_properties() -> Map<String, Value> {
     Map::from_iter([
         text_property(
             "store_path",
             "Optional RNMDB store path. Omit to use the shared .rhoiscribe preferences and logs database.",
         ),
-        text_property("output_path", "JSON file path to write the exported logs."),
+        text_property(
+            "mod_root",
+            "Optional existing HOI4 mod directory. Omit to include logs from every scope.",
+        ),
+        text_property("tool_name", "Optional exact RHoiScribe tool name."),
+        bool_property("success", "Optional tool-call success state."),
+        integer_property(
+            "since_unix_seconds",
+            "Optional inclusive minimum Unix timestamp.",
+        ),
+        integer_property(
+            "until_unix_seconds",
+            "Optional inclusive maximum Unix timestamp.",
+        ),
+        text_property(
+            "text_query",
+            "Optional RNMDB full-text query using !, &, |, and parentheses. Whitespace does not imply AND.",
+        ),
         text_property(
             "pattern",
             "Optional Rust regex matched against each complete log entry serialized as JSON.",
         ),
         integer_property(
             "limit",
-            "Maximum entries to export, clamped to the latest 32767 retained entries.",
+            "Maximum matching entries to return or export, clamped to 32767.",
         ),
     ])
 }
