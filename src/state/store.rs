@@ -27,9 +27,10 @@ use serde_json::Value;
 
 use super::{
     GLOBAL_SCOPE_KEY, GLOBAL_SCOPE_KIND, RNMDB_REVISION, STATE_SCHEMA_VERSION,
-    StateMigrationReport, StoredPreferenceRecord, StoredToolLogRecord, legacy,
+    StateMigrationReport, StateScope, StoredPreferenceRecord, StoredToolLogRecord, legacy,
     path::{clean_display_path, ensure_parent, page_crypto_key},
-    state_database_error,
+    scope::validate_stored_scope,
+    state_database_error, stored_preference_record_key,
 };
 
 const CREATE_METADATA_TABLE: &str =
@@ -81,11 +82,12 @@ impl RnmdbStateStore {
         self.migration_report.take()
     }
 
-    pub(crate) fn list_global_preferences(
+    pub(crate) fn list_preferences(
         &mut self,
+        scope: &StateScope,
     ) -> Result<Vec<StoredPreferenceRecord>, String> {
-        let scope_kind = sql_text(GLOBAL_SCOPE_KIND);
-        let scope_key = sql_text(GLOBAL_SCOPE_KEY);
+        let scope_kind = sql_text(scope.kind());
+        let scope_key = sql_text(scope.key());
         let sql = format!(
             "SELECT record_key, scope_kind, scope_key, mod_root, preference_key, value_json, updated_at_unix_seconds FROM agent_preferences WHERE scope_kind = {scope_kind} AND scope_key = {scope_key} ORDER BY preference_key;"
         );
@@ -483,8 +485,26 @@ fn validate_import(
 }
 
 fn validate_preference(record: &StoredPreferenceRecord) -> Result<(), String> {
+    validate_preference_identity(record)?;
     validate_json(&record.value_json, "preference value")?;
     sql_i64(record.updated_at_unix_seconds, "preference timestamp").map(|_| ())
+}
+
+fn validate_preference_identity(record: &StoredPreferenceRecord) -> Result<(), String> {
+    validate_stored_scope(
+        &record.scope_kind,
+        &record.scope_key,
+        record.mod_root.as_deref(),
+    )?;
+    let expected = stored_preference_record_key(
+        &record.scope_kind,
+        &record.scope_key,
+        &record.preference_key,
+    );
+    if record.record_key != expected {
+        return Err("preference record_key does not match its scope and key".to_string());
+    }
+    Ok(())
 }
 
 fn validate_log(record: &StoredToolLogRecord) -> Result<(), String> {
@@ -503,7 +523,7 @@ fn validate_json(value: &str, label: &str) -> Result<(), String> {
 }
 
 fn decode_preference(values: &[SqlValue]) -> Result<StoredPreferenceRecord, String> {
-    Ok(StoredPreferenceRecord {
+    let record = StoredPreferenceRecord {
         record_key: required_text(values, 0, "agent_preferences.record_key")?,
         scope_kind: required_text(values, 1, "agent_preferences.scope_kind")?,
         scope_key: required_text(values, 2, "agent_preferences.scope_key")?,
@@ -515,7 +535,9 @@ fn decode_preference(values: &[SqlValue]) -> Result<StoredPreferenceRecord, Stri
             6,
             "agent_preferences.updated_at_unix_seconds",
         )?,
-    })
+    };
+    validate_preference(&record)?;
+    Ok(record)
 }
 
 fn decode_log(values: &[SqlValue]) -> Result<StoredToolLogRecord, String> {

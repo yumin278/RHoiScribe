@@ -89,8 +89,9 @@ pub use gui_gfx_asset::{
 };
 pub use mod_skeleton::Hoi4ModSkeletonRequest;
 pub use preferences::{
-    AgentPreferenceItem, AgentPreferenceMutationResult, AgentPreferencesResult,
-    DeleteAgentPreferenceRequest, ListAgentPreferencesRequest, SetAgentPreferenceRequest,
+    AgentPreferenceItem, AgentPreferenceMutationResult, AgentPreferenceProvenance,
+    AgentPreferencesResult, DeleteAgentPreferenceRequest, ListAgentPreferencesRequest,
+    SetAgentPreferenceRequest,
 };
 pub use project_index::{IndexedFile, ProjectIndexItem, ProjectIndexRequest, ProjectIndexResult};
 pub use project_repair::{
@@ -263,21 +264,21 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "list_agent_preferences",
         title: "List agent preferences",
-        description: "Read persistent RHoiScribe user or project habits from the RNMDB-backed .rhoiscribe store so agents can keep cross-IDE preferences such as localisation folder style.",
+        description: "Read persistent RHoiScribe habits. Omit mod_root for the user-global effective view, or provide an existing mod root to receive global, mod-local, and effective views where mod values override global values.",
         required: &[],
         handler: call_list_agent_preferences,
     },
     ToolSpec {
         name: "set_agent_preference",
         title: "Set agent preference",
-        description: "Write one persistent RHoiScribe preference into the RNMDB-backed .rhoiscribe store. Use stable ASCII keys such as localisation.folder_style.",
+        description: "Write one persistent RHoiScribe preference. Omit mod_root to set a user-global habit, or provide an existing mod root to set only that mod's override; returned preferences are the effective view.",
         required: &["key", "value"],
         handler: call_set_agent_preference,
     },
     ToolSpec {
         name: "delete_agent_preference",
         title: "Delete agent preference",
-        description: "Remove one persistent RHoiScribe preference from the RNMDB-backed .rhoiscribe store.",
+        description: "Delete one persistent RHoiScribe preference only from the requested global or mod scope. Deleting a mod override reveals any global value in the returned effective view.",
         required: &["key"],
         handler: call_delete_agent_preference,
     },
@@ -1414,8 +1415,64 @@ fn tool_properties(tool_name: &str) -> Map<String, Value> {
         "generate_decision_batch" => decision_batch_properties(),
         "query_tool_logs" => query_tool_logs_properties(),
         "export_tool_logs" => export_tool_logs_properties(),
+        _ => preference_tool_properties(tool_name),
+    }
+}
+
+fn preference_tool_properties(tool_name: &str) -> Map<String, Value> {
+    match tool_name {
+        "list_agent_preferences" => list_agent_preferences_properties(),
+        "set_agent_preference" => set_agent_preference_properties(),
+        "delete_agent_preference" => delete_agent_preference_properties(),
         _ => Map::new(),
     }
+}
+
+fn list_agent_preferences_properties() -> Map<String, Value> {
+    Map::from_iter([
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn set_agent_preference_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "key",
+            "Stable ASCII preference key such as localisation.folder_style.",
+        ),
+        any_value_property(
+            "value",
+            "JSON preference value to store in the requested scope.",
+        ),
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn delete_agent_preference_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "key",
+            "Preference key to delete from only the requested scope.",
+        ),
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn preference_store_path_property() -> (String, Value) {
+    text_property(
+        "store_path",
+        "Optional RNMDB store path. Omit to use the shared .rhoiscribe state database.",
+    )
+}
+
+fn preference_mod_root_property() -> (String, Value) {
+    text_property(
+        "mod_root",
+        "Optional existing HOI4 mod directory. Omit for global scope; provide it for canonical mod-local scope and an effective global-plus-mod view.",
+    )
 }
 
 fn open_language_workspace_properties() -> Map<String, Value> {
@@ -1563,6 +1620,15 @@ fn array_property(name: &str, description: &str) -> (String, Value) {
 
 fn bool_property(name: &str, description: &str) -> (String, Value) {
     described_property(name, "boolean", description)
+}
+
+fn any_value_property(name: &str, description: &str) -> (String, Value) {
+    (
+        name.to_string(),
+        json!({
+            "description": description
+        }),
+    )
 }
 
 fn described_property(name: &str, property_type: &str, description: &str) -> (String, Value) {

@@ -23,15 +23,18 @@ use std::path::{Path, PathBuf};
 
 pub(crate) mod legacy;
 pub(crate) mod path;
+pub(crate) mod scope;
 pub(crate) mod store;
 
 pub(crate) use path::{StateMutationLock, clean_display_path, state_store_path};
+pub(crate) use scope::StateScope;
 pub(crate) use store::RnmdbStateStore;
 
 pub(crate) const STATE_SCHEMA_VERSION: u32 = 2;
 pub(crate) const RNMDB_REVISION: &str = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee";
 pub(crate) const GLOBAL_SCOPE_KIND: &str = "global";
 pub(crate) const GLOBAL_SCOPE_KEY: &str = "global";
+pub(crate) const MOD_SCOPE_KIND: &str = "mod";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StateMigrationReport {
@@ -88,5 +91,17 @@ pub(crate) fn is_state_database_error(error: &str) -> bool {
 }
 
 pub(crate) fn global_record_key(preference_key: &str) -> String {
-    format!("{GLOBAL_SCOPE_KIND}:{GLOBAL_SCOPE_KEY}:{preference_key}")
+    preference_record_key(&StateScope::Global, preference_key)
+}
+
+pub(crate) fn preference_record_key(scope: &StateScope, preference_key: &str) -> String {
+    stored_preference_record_key(scope.kind(), scope.key(), preference_key)
+}
+
+pub(crate) fn stored_preference_record_key(
+    scope_kind: &str,
+    scope_key: &str,
+    preference_key: &str,
+) -> String {
+    format!("{scope_kind}:{scope_key}:{preference_key}")
 }
