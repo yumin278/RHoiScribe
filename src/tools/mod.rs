@@ -43,12 +43,13 @@ mod project_validation;
 mod rchadow_debug;
 mod rnmdb_store;
 mod script_edit;
+mod state_maintenance;
 mod tool_logs;
 mod unique_scan;
 
 use std::{borrow::Cow, error::Error, fmt, fs, path::Path, sync::Arc};
 
-use rmcp::model::{CallToolResult, JsonObject, Tool, ToolAnnotations};
+use rmcp::model::{CallToolResult, Content, JsonObject, Tool, ToolAnnotations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
@@ -89,8 +90,9 @@ pub use gui_gfx_asset::{
 };
 pub use mod_skeleton::Hoi4ModSkeletonRequest;
 pub use preferences::{
-    AgentPreferenceItem, AgentPreferenceMutationResult, AgentPreferencesResult,
-    DeleteAgentPreferenceRequest, ListAgentPreferencesRequest, SetAgentPreferenceRequest,
+    AgentPreferenceItem, AgentPreferenceMutationResult, AgentPreferenceProvenance,
+    AgentPreferencesResult, DeleteAgentPreferenceRequest, ListAgentPreferencesRequest,
+    SetAgentPreferenceRequest,
 };
 pub use project_index::{IndexedFile, ProjectIndexItem, ProjectIndexRequest, ProjectIndexResult};
 pub use project_repair::{
@@ -101,9 +103,13 @@ pub use project_validation::{
 };
 pub use rchadow_debug::{RchadowDebugLaunchRequest, RchadowDebugLaunchResult};
 pub use script_edit::{EditHoi4ScriptFileRequest, EditHoi4ScriptFileResult, ScriptEditOperation};
+pub use state_maintenance::{
+    BackupRhoiscribeStateRequest, BackupRhoiscribeStateResult, InspectRhoiscribeStateRequest,
+    InspectRhoiscribeStateResult,
+};
 pub use tool_logs::{
     ToolLogEntry, ToolLogExportRequest, ToolLogExportResult, ToolLogQueryRequest,
-    ToolLogQueryResult,
+    ToolLogQueryResult, ToolLogTextRank,
 };
 pub use unique_scan::{
     CandidateScanResult, IdentifierCandidate, IdentifierMatch, PathRisk, ScanRoot,
@@ -263,37 +269,51 @@ const TOOL_SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "list_agent_preferences",
         title: "List agent preferences",
-        description: "Read persistent RHoiScribe user or project habits from the RNMDB-backed .rhoiscribe store so agents can keep cross-IDE preferences such as localisation folder style.",
+        description: "Read persistent RHoiScribe habits. Omit mod_root for the user-global effective view, or provide an existing mod root to receive global, mod-local, and effective views where mod values override global values.",
         required: &[],
         handler: call_list_agent_preferences,
     },
     ToolSpec {
         name: "set_agent_preference",
         title: "Set agent preference",
-        description: "Write one persistent RHoiScribe preference into the RNMDB-backed .rhoiscribe store. Use stable ASCII keys such as localisation.folder_style.",
+        description: "Write one persistent RHoiScribe preference. Omit mod_root to set a user-global habit, or provide an existing mod root to set only that mod's override; returned preferences are the effective view.",
         required: &["key", "value"],
         handler: call_set_agent_preference,
     },
     ToolSpec {
         name: "delete_agent_preference",
         title: "Delete agent preference",
-        description: "Remove one persistent RHoiScribe preference from the RNMDB-backed .rhoiscribe store.",
+        description: "Delete one persistent RHoiScribe preference only from the requested global or mod scope. Deleting a mod override reveals any global value in the returned effective view.",
         required: &["key"],
         handler: call_delete_agent_preference,
     },
     ToolSpec {
         name: "query_tool_logs",
         title: "Query tool logs",
-        description: "Read recent RHoiScribe tool-call logs from the same RNMDB-backed .rhoiscribe store as preferences. Supports optional regex filtering over each log entry's JSON text.",
+        description: "Read scoped RHoiScribe tool-call logs with structured filters, backward-compatible regex matching, and ranked RNMDB full-text queries. Omit mod_root to search all scopes.",
         required: &[],
         handler: call_query_tool_logs,
     },
     ToolSpec {
         name: "export_tool_logs",
         title: "Export tool logs",
-        description: "Export RHoiScribe tool-call logs as JSON from the same RNMDB-backed .rhoiscribe store as preferences. Supports optional regex filtering over each log entry's JSON text.",
+        description: "Export scoped RHoiScribe tool-call logs as JSON using the same structured, regex, and ranked RNMDB full-text filters as query_tool_logs.",
         required: &["output_path"],
         handler: call_export_tool_logs,
+    },
+    ToolSpec {
+        name: "inspect_rhoiscribe_state",
+        title: "Inspect RHoiScribe state",
+        description: "Inspect the existing encrypted RHoiScribe RNMDB state database without creating, migrating, repairing, or logging to it. Set deep_verify=true to authenticate every present page with the existing page key.",
+        required: &[],
+        handler: call_inspect_rhoiscribe_state,
+    },
+    ToolSpec {
+        name: "backup_rhoiscribe_state",
+        title: "Backup RHoiScribe state",
+        description: "Validate a non-overwriting encrypted RNMDB state backup plan. The operation is a dry run unless apply=true; an applied backup is authenticated before success is returned.",
+        required: &["destination"],
+        handler: call_backup_rhoiscribe_state,
     },
     ToolSpec {
         name: "index_hoi4_project",
@@ -595,6 +615,10 @@ pub enum ToolError {
     InvalidArguments(serde_json::Error),
     InvalidRequest(String),
     StateDatabaseFailed(String),
+    ToolFailedAfterStateMigration {
+        notice: String,
+        source: Box<ToolError>,
+    },
     WriteFailed(std::io::Error),
 }
 
@@ -645,7 +669,7 @@ impl ToolCatalog {
         let arguments_for_log = Value::Object(arguments.clone());
         let result = self.call_without_logging(&context, name, arguments);
         match self.record_tool_log(name, arguments_for_log, &result) {
-            Ok(()) => result,
+            Ok(migration_message) => append_migration_message(result, migration_message),
             Err(log_error) => match result {
                 Ok(_) => Err(log_error),
                 Err(tool_error) => Err(ToolError::StateDatabaseFailed(format!(
@@ -675,17 +699,19 @@ impl ToolCatalog {
         name: &str,
         arguments: Value,
         result: &Result<CallToolResult, ToolError>,
-    ) -> Result<(), ToolError> {
-        if cwt_diagnostics::should_skip_tool_log(name, &arguments)
+    ) -> Result<Option<String>, ToolError> {
+        if name == "query_tool_logs"
+            || state_maintenance::is_state_maintenance_tool(name)
+            || cwt_diagnostics::should_skip_tool_log(name, &arguments)
             || cwt_intelligence::is_cwt_intelligence_tool(name)
             || cwt_localisation::is_cwt_localisation_tool(name)
         {
-            return Ok(());
+            return Ok(None);
         }
 
         let store_path = arguments
             .as_object()
-            .and_then(tool_logs::tool_log_store_path_from_arguments);
+            .and_then(|arguments| tool_logs::tool_log_store_path_from_arguments(name, arguments));
         let (success, result, error) = tool_log_outcome(result);
         tool_logs::record_tool_call(
             store_path.as_deref(),
@@ -703,6 +729,25 @@ impl ToolCatalog {
                 name, error
             ))
         })
+    }
+}
+
+fn append_migration_message(
+    result: Result<CallToolResult, ToolError>,
+    migration_message: Option<String>,
+) -> Result<CallToolResult, ToolError> {
+    let Some(message) = migration_message else {
+        return result;
+    };
+    match result {
+        Ok(mut result) => {
+            result.content.push(Content::text(message));
+            Ok(result)
+        }
+        Err(source) => Err(ToolError::ToolFailedAfterStateMigration {
+            notice: message,
+            source: Box::new(source),
+        }),
     }
 }
 
@@ -909,6 +954,18 @@ impl ToolEngine {
         tool_logs::export_tool_logs(request).map_err(map_state_database_error)
     }
 
+    pub fn inspect_rhoiscribe_state(
+        request: InspectRhoiscribeStateRequest,
+    ) -> Result<InspectRhoiscribeStateResult, ToolError> {
+        state_maintenance::inspect_rhoiscribe_state(request).map_err(map_state_database_error)
+    }
+
+    pub fn backup_rhoiscribe_state(
+        request: BackupRhoiscribeStateRequest,
+    ) -> Result<BackupRhoiscribeStateResult, ToolError> {
+        state_maintenance::backup_rhoiscribe_state(request).map_err(map_state_database_error)
+    }
+
     pub fn index_hoi4_project(
         request: ProjectIndexRequest,
     ) -> Result<ProjectIndexResult, ToolError> {
@@ -979,12 +1036,24 @@ impl fmt::Display for ToolError {
             ToolError::StateDatabaseFailed(message) => {
                 write!(formatter, "RHoiScribe state database error: {}", message)
             }
+            ToolError::ToolFailedAfterStateMigration { notice, source } => {
+                write!(formatter, "{source}; {notice}")
+            }
             ToolError::WriteFailed(error) => write!(formatter, "write failed: {}", error),
         }
     }
 }
 
-impl Error for ToolError {}
+impl Error for ToolError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ToolError::InvalidArguments(error) => Some(error),
+            ToolError::ToolFailedAfterStateMigration { source, .. } => Some(source.as_ref()),
+            ToolError::WriteFailed(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl From<std::io::Error> for ToolError {
     fn from(error: std::io::Error) -> Self {
@@ -1275,6 +1344,26 @@ fn call_export_tool_logs(
     Ok(structured_result(ToolEngine::export_tool_logs(request)?))
 }
 
+fn call_inspect_rhoiscribe_state(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
+    let request = parse_arguments::<InspectRhoiscribeStateRequest>(arguments)?;
+    Ok(structured_result(ToolEngine::inspect_rhoiscribe_state(
+        request,
+    )?))
+}
+
+fn call_backup_rhoiscribe_state(
+    _context: &ToolContext,
+    arguments: JsonObject,
+) -> Result<CallToolResult, ToolError> {
+    let request = parse_arguments::<BackupRhoiscribeStateRequest>(arguments)?;
+    Ok(structured_result(ToolEngine::backup_rhoiscribe_state(
+        request,
+    )?))
+}
+
 fn call_index_hoi4_project(
     _context: &ToolContext,
     arguments: JsonObject,
@@ -1363,7 +1452,10 @@ fn input_schema(tool_name: &str, required: &[&str]) -> JsonObject {
                 .collect(),
         ),
     );
-    schema.insert("additionalProperties".to_string(), Value::Bool(true));
+    schema.insert(
+        "additionalProperties".to_string(),
+        Value::Bool(!state_maintenance::is_state_maintenance_tool(tool_name)),
+    );
     let properties = tool_properties(tool_name);
     if !properties.is_empty() {
         schema.insert("properties".to_string(), Value::Object(properties));
@@ -1379,8 +1471,72 @@ fn tool_properties(tool_name: &str) -> Map<String, Value> {
         "generate_decision_batch" => decision_batch_properties(),
         "query_tool_logs" => query_tool_logs_properties(),
         "export_tool_logs" => export_tool_logs_properties(),
+        _ => state_maintenance_tool_properties(tool_name),
+    }
+}
+
+fn state_maintenance_tool_properties(tool_name: &str) -> Map<String, Value> {
+    match tool_name {
+        "inspect_rhoiscribe_state" => inspect_rhoiscribe_state_properties(),
+        "backup_rhoiscribe_state" => backup_rhoiscribe_state_properties(),
+        _ => preference_tool_properties(tool_name),
+    }
+}
+
+fn preference_tool_properties(tool_name: &str) -> Map<String, Value> {
+    match tool_name {
+        "list_agent_preferences" => list_agent_preferences_properties(),
+        "set_agent_preference" => set_agent_preference_properties(),
+        "delete_agent_preference" => delete_agent_preference_properties(),
         _ => Map::new(),
     }
+}
+
+fn list_agent_preferences_properties() -> Map<String, Value> {
+    Map::from_iter([
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn set_agent_preference_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "key",
+            "Stable ASCII preference key such as localisation.folder_style.",
+        ),
+        any_value_property(
+            "value",
+            "JSON preference value to store in the requested scope.",
+        ),
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn delete_agent_preference_properties() -> Map<String, Value> {
+    Map::from_iter([
+        text_property(
+            "key",
+            "Preference key to delete from only the requested scope.",
+        ),
+        preference_store_path_property(),
+        preference_mod_root_property(),
+    ])
+}
+
+fn preference_store_path_property() -> (String, Value) {
+    text_property(
+        "store_path",
+        "Optional RNMDB store path. Omit to use the shared .rhoiscribe state database.",
+    )
+}
+
+fn preference_mod_root_property() -> (String, Value) {
+    text_property(
+        "mod_root",
+        "Optional existing HOI4 mod directory. Omit for global scope; provide it for canonical mod-local scope and an effective global-plus-mod view.",
+    )
 }
 
 fn open_language_workspace_properties() -> Map<String, Value> {
@@ -1480,36 +1636,76 @@ fn decision_batch_properties() -> Map<String, Value> {
 }
 
 fn query_tool_logs_properties() -> Map<String, Value> {
+    tool_log_filter_properties()
+}
+
+fn export_tool_logs_properties() -> Map<String, Value> {
+    let mut properties = tool_log_filter_properties();
+    properties.insert(
+        "output_path".to_string(),
+        json!({
+            "type": "string",
+            "description": "JSON file path to write the exported logs."
+        }),
+    );
+    properties
+}
+
+fn inspect_rhoiscribe_state_properties() -> Map<String, Value> {
     Map::from_iter([
-        text_property(
-            "store_path",
-            "Optional RNMDB store path. Omit to use the shared .rhoiscribe preferences and logs database.",
-        ),
-        text_property(
-            "pattern",
-            "Optional Rust regex matched against each complete log entry serialized as JSON.",
-        ),
-        integer_property(
-            "limit",
-            "Maximum entries to return, clamped to the latest 32767 retained entries.",
+        preference_store_path_property(),
+        bool_property(
+            "deep_verify",
+            "Authenticate every present RNMDB page with the existing key without modifying state.",
         ),
     ])
 }
 
-fn export_tool_logs_properties() -> Map<String, Value> {
+fn backup_rhoiscribe_state_properties() -> Map<String, Value> {
+    Map::from_iter([
+        preference_store_path_property(),
+        text_property(
+            "destination",
+            "Explicit new backup file path. Its parent must already exist and overwrite is never allowed.",
+        ),
+        bool_property(
+            "apply",
+            "Omit or set false for a dry run; true creates and authenticates the new backup.",
+        ),
+    ])
+}
+
+fn tool_log_filter_properties() -> Map<String, Value> {
     Map::from_iter([
         text_property(
             "store_path",
             "Optional RNMDB store path. Omit to use the shared .rhoiscribe preferences and logs database.",
         ),
-        text_property("output_path", "JSON file path to write the exported logs."),
+        text_property(
+            "mod_root",
+            "Optional existing HOI4 mod directory. Omit to include logs from every scope.",
+        ),
+        text_property("tool_name", "Optional exact RHoiScribe tool name."),
+        bool_property("success", "Optional tool-call success state."),
+        integer_property(
+            "since_unix_seconds",
+            "Optional inclusive minimum Unix timestamp.",
+        ),
+        integer_property(
+            "until_unix_seconds",
+            "Optional inclusive maximum Unix timestamp.",
+        ),
+        text_property(
+            "text_query",
+            "Optional RNMDB full-text query using !, &, |, and parentheses. Whitespace does not imply AND.",
+        ),
         text_property(
             "pattern",
             "Optional Rust regex matched against each complete log entry serialized as JSON.",
         ),
         integer_property(
             "limit",
-            "Maximum entries to export, clamped to the latest 32767 retained entries.",
+            "Maximum matching entries to return or export, clamped to 32767.",
         ),
     ])
 }
@@ -1528,6 +1724,15 @@ fn array_property(name: &str, description: &str) -> (String, Value) {
 
 fn bool_property(name: &str, description: &str) -> (String, Value) {
     described_property(name, "boolean", description)
+}
+
+fn any_value_property(name: &str, description: &str) -> (String, Value) {
+    (
+        name.to_string(),
+        json!({
+            "description": description
+        }),
+    )
 }
 
 fn described_property(name: &str, property_type: &str, description: &str) -> (String, Value) {

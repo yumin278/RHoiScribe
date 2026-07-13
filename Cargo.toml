@@ -8,21 +8,36 @@ build = "build.rs"
 [dependencies]
 anyhow = "1.0.102"
 cwtools_parser = { git = "https://github.com/MillenniumDawn/cwtools.git", rev = "cb7f8c8c95dd68fcbd06d37efb87bc49fc17fbef", package = "cwtools_parser" }
-cwtools-hoi4-config = { git = "https://github.com/Hilde-Research-Foundation/cwtools-hoi4-config-rs.git", rev = "4f19c45ee151fc7052351a925975146b75591dee" }
+cwtools-hoi4-config = { git = "https://github.com/Hilde-Research-Foundation/cwtools-hoi4-config-rs.git", rev = "d40f0f65137e5e96c044a6d848653135d2b22fec" }
 cwtools_rules = { git = "https://github.com/MillenniumDawn/cwtools.git", rev = "cb7f8c8c95dd68fcbd06d37efb87bc49fc17fbef", package = "cwtools_rules" }
 cwtools_string_table = { git = "https://github.com/MillenniumDawn/cwtools.git", rev = "cb7f8c8c95dd68fcbd06d37efb87bc49fc17fbef", package = "cwtools_string_table" }
 cwtools_validation = { git = "https://github.com/MillenniumDawn/cwtools.git", rev = "cb7f8c8c95dd68fcbd06d37efb87bc49fc17fbef", package = "cwtools_validation" }
 encoding_rs = "0.8.35"
 getrandom = "0.2.17"
+hex = "0.4.3"
 rchadow = { git = "https://github.com/czxieddan/Rchadow.git", rev = "ed0030084a56dd0ef6768843a739c6c10ec69316", features = ["rnmdb"] }
-rnmdb-common = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "ab1bf5e7fa4f521d6d32364cd217ff1a42b3c3b1" }
-rnmdb-storage = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "ab1bf5e7fa4f521d6d32364cd217ff1a42b3c3b1" }
+rnmdb-catalog = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-cli = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-common = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-executor = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-fts = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-storage = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
+rnmdb-types = { git = "https://github.com/czxieddan/RNovModularDB.git", rev = "8d2b65ad1ee3ee542e1307c1693bc4de4f7edbee" }
 rmcp = { version = "1.7.0", features = ["server", "transport-io"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 regex = "1.12.2"
+same-file = "=1.0.6"
+sha2 = "0.10.9"
 toml = "0.8.23"
+
+[target.'cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple", target_os = "redox"))'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
+
+[target.'cfg(windows)'.dependencies]
+atomicwrites = "=0.4.4"
+file-id = "=0.2.3"
 
 [profile.release]
 codegen-units = 1
